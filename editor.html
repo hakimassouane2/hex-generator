@@ -1,354 +1,1649 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Hex Editor — West Marches style</title>
-<style>
-  :root{--bg:#10141a;--panel:#171c24;--panel2:#1f2630;--ink:#e8e6df;--muted:#8b94a3;--accent:#c9a24b;--border:#2a323d;}
-  *{box-sizing:border-box}
-  html,body{margin:0;height:100%;font-family:system-ui,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);overflow:hidden}
-  .app{display:flex;height:100vh}
-  /* canvas */
-  .stage{flex:1;position:relative;overflow:auto;background:radial-gradient(circle at 50% 40%,#1a2029,#0b0e12)}
-  #svgWrap{display:inline-block}
-  svg{display:block}
-  .hit{fill:transparent;stroke:transparent;stroke-width:3;pointer-events:all;cursor:crosshair}
-  .hit:hover{stroke:#ffffffcc}
-  .gridline{fill:none;stroke:#0008;stroke-width:1.5;pointer-events:none}
-  /* panneau contextuel */
-  .panel{width:240px;flex:0 0 240px;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;padding:16px 16px 12px}
-  .panel h2{font-size:20px;margin:0 0 12px}
-  .erase{display:flex;align-items:center;gap:8px;font-size:14px;margin-bottom:12px;cursor:pointer}
-  .erase input{width:16px;height:16px;accent-color:var(--accent)}
-  .preview{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center;cursor:pointer}
-  .preview img{width:120px;height:120px;object-fit:contain}
-  .preview .nm{font-size:14px;margin-top:6px}
-  .preview .sub{font-size:11px;color:var(--muted)}
-  .variants{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:10px}
-  .variants img{width:34px;height:34px;object-fit:contain;background:#0004;border:2px solid transparent;border-radius:6px;cursor:pointer}
-  .variants img.sel{border-color:var(--accent)}
-  .opt{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:12px;cursor:pointer}
-  .opt input{accent-color:var(--accent)}
-  .hint{font-size:12px;color:var(--muted);line-height:1.5;margin-top:10px}
-  .spacer{flex:1}
-  .footer{font-size:12px;color:var(--muted);line-height:1.4}
-  .footer b{color:var(--ink)}
-  button{background:var(--accent);color:#10141a;border:0;border-radius:7px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;width:100%}
-  button.ghost{background:transparent;color:var(--ink);border:1px solid var(--border);font-weight:500}
-  button.danger{background:#c0584e;color:#fff;margin-top:8px}
-  .pbtns{display:flex;flex-direction:column;gap:6px;margin-top:10px}
-  /* barre d'outils verticale */
-  .toolbar{width:56px;flex:0 0 56px;background:#0c0f14;border-left:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:6px}
-  .tbtn{width:40px;height:40px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:19px;color:var(--accent);cursor:pointer;border:1px solid transparent;background:transparent;position:relative}
-  .tbtn:hover{background:#ffffff10}
-  .tbtn.active{background:#ffffff14;border-color:var(--accent)}
-  .tbtn.disabled{color:#4a525e;cursor:not-allowed}
-  .toolbar .spacer{flex:1;width:1px}
-  /* modale catalogue */
-  .modal{position:fixed;inset:0;background:#0b0e12ee;z-index:50;display:none;flex-direction:column;padding:18px 26px}
-  .modal.open{display:flex}
-  .modal .mhead{display:flex;align-items:center;gap:16px;margin-bottom:8px}
-  .modal h2{margin:0;font-size:22px}
-  .modal .msearch{flex:1}
-  .modal .msearch input{width:100%;max-width:340px;background:var(--panel2);color:var(--ink);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px}
-  .modal .close{margin-left:auto;font-size:26px;cursor:pointer;color:var(--muted);background:none;border:0;width:auto}
-  .modal .mbody{overflow-y:auto;flex:1}
-  .mgroup h3{font-size:17px;margin:18px 0 10px;color:var(--ink)}
-  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px}
-  .card{position:relative;aspect-ratio:1;background:var(--panel2);border:2px solid var(--border);border-radius:9px;cursor:pointer;overflow:hidden;display:flex;align-items:center;justify-content:center}
-  .card:hover{border-color:#ffffff66}
-  .card.sel{border-color:var(--accent)}
-  .card img{width:100%;height:100%;object-fit:contain}
-  .card .badge{position:absolute;top:4px;right:4px;background:#000a;color:#fff;font-size:10px;padding:1px 6px;border-radius:8px}
-  .card .lbl{position:absolute;bottom:0;left:0;right:0;background:#000a;color:#fff;font-size:10px;padding:2px 4px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#000d;padding:7px 16px;border-radius:20px;font-size:12px;z-index:60}
-</style>
-</head>
-<body>
-<div class="app">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hex Editor - West Marches style</title>
+    <style>
+      :root {
+        --bg: #10141a;
+        --panel: #171c24;
+        --panel2: #1f2630;
+        --ink: #e8e6df;
+        --muted: #8b94a3;
+        --accent: #c9a24b;
+        --border: #2a323d;
+        --wm-gradient-inner: #232c39;
+        --wm-gradient-outer: #0b0e12;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+        overflow: hidden;
+      }
+      .app {
+        display: flex;
+        height: 100vh;
+      }
+      /* canvas */
+      .stage {
+        flex: 1;
+        position: relative;
+        overflow: auto;
+        background-color: var(--wm-gradient-outer);
+        background-image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDI0IiBoZWlnaHQ9IjEwMjQiPjxkZWZzPjxmaWx0ZXIgaWQ9ImEiIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgeD0iMCIgeT0iMCIgd2lkdGg9IjEwMjQiIGhlaWdodD0iMTAyNCI+PGZlVHVyYnVsZW5jZSB0eXBlPSJmcmFjdGFsTm9pc2UiIGJhc2VGcmVxdWVuY3k9Ii4wMDIiIHNlZWQ9IjIiIHN0aXRjaFRpbGVzPSJzdGl0Y2giLz48L2ZpbHRlcj48ZmlsdGVyIGlkPSJiIiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIHg9IjAiIHk9IjAiIHdpZHRoPSIxMDI0IiBoZWlnaHQ9IjEwMjQiPjxmZVR1cmJ1bGVuY2UgdHlwZT0iZnJhY3RhbE5vaXNlIiBiYXNlRnJlcXVlbmN5PSIuMDMiIG51bU9jdGF2ZXM9IjMiIHNlZWQ9IjMiIHN0aXRjaFRpbGVzPSJzdGl0Y2giLz48L2ZpbHRlcj48ZmlsdGVyIGlkPSJjIiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIHg9IjAiIHk9IjAiIHdpZHRoPSIxMDI0IiBoZWlnaHQ9IjEwMjQiPjxmZVR1cmJ1bGVuY2UgdHlwZT0iZnJhY3RhbE5vaXNlIiBiYXNlRnJlcXVlbmN5PSIuMDEiIG51bU9jdGF2ZXM9IjMiIHNlZWQ9IjQiIHN0aXRjaFRpbGVzPSJzdGl0Y2giLz48L2ZpbHRlcj48ZmlsdGVyIGlkPSJkIiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIHg9IjAiIHk9IjAiIHdpZHRoPSIxMDI0IiBoZWlnaHQ9IjEwMjQiPjxmZVR1cmJ1bGVuY2UgdHlwZT0iZnJhY3RhbE5vaXNlIiBiYXNlRnJlcXVlbmN5PSIuNSIgbnVtT2N0YXZlcz0iNSIgc3RpdGNoVGlsZXM9InN0aXRjaCIvPjwvZmlsdGVyPjwvZGVmcz48cGF0aCBmaWx0ZXI9InVybCgjYSkiIG9wYWNpdHk9Ii4zIiBkPSJNMCAwaDEwMjR2MTAyNEgweiIvPjxwYXRoIGZpbHRlcj0idXJsKCNiKSIgb3BhY2l0eT0iLjEiIGQ9Ik0wIDBoMTAyNHYxMDI0SDB6Ii8+PHBhdGggZmlsdGVyPSJ1cmwoI2MpIiBvcGFjaXR5PSIuMiIgZD0iTTAgMGgxMDI0djEwMjRIMHoiLz48cGF0aCBmaWx0ZXI9InVybCgjZCkiIG9wYWNpdHk9Ii4zIiBkPSJNMCAwaDEwMjR2MTAyNEgweiIvPjwvc3ZnPgo=),
+          radial-gradient(
+            closest-side,
+            var(--wm-gradient-inner),
+            var(--wm-gradient-outer)
+          );
+        background-repeat: repeat, no-repeat;
+        background-position:
+          0 0,
+          50% -50vw;
+        background-size:
+          1024px 1024px,
+          150vw 150vw;
+        background-blend-mode: overlay, normal;
+      }
+      @media (min-width: 1200px) {
+        .stage {
+          background-position:
+            0 0,
+            50% -600px;
+          background-size:
+            1024px 1024px,
+            1800px 1800px;
+        }
+      }
+      #svgWrap {
+        display: inline-block;
+      }
+      svg {
+        display: block;
+      }
+      .hit {
+        fill: transparent;
+        stroke: transparent;
+        stroke-width: 3;
+        pointer-events: all;
+        cursor: crosshair;
+      }
+      .hit:hover {
+        stroke: rgba(247, 242, 217, 0.47);
+      }
+      .gridline {
+        fill: none;
+        stroke: #0008;
+        stroke-width: 1.5;
+        pointer-events: none;
+      }
+      .gridline.pad {
+        stroke: #00000029;
+      }
+      #ghost {
+        opacity: 0.5;
+        pointer-events: none;
+      }
+      .stage.pan-ready {
+        cursor: grab;
+      }
+      .stage.panning {
+        cursor: grabbing;
+      }
+      .stage.pan-ready .hit,
+      .stage.panning .hit {
+        pointer-events: none;
+      }
+      /* panneau contextuel */
+      .panel {
+        width: 240px;
+        flex: 0 0 240px;
+        background: var(--panel);
+        border-left: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        padding: 16px 16px 12px;
+        overflow: hidden;
+        transition:
+          flex-basis 0.18s ease,
+          width 0.18s ease,
+          padding 0.18s ease;
+      }
+      .panel.collapsed {
+        flex-basis: 0;
+        width: 0;
+        padding-left: 0;
+        padding-right: 0;
+        border-left-color: transparent;
+      }
+      .panel h2 {
+        font-size: 20px;
+        margin: 0 0 12px;
+      }
+      .erase {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        margin-bottom: 12px;
+        cursor: pointer;
+      }
+      .erase input {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--accent);
+      }
+      .preview {
+        background: var(--panel2);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px;
+        text-align: center;
+        cursor: pointer;
+      }
+      .preview img {
+        width: 120px;
+        height: 120px;
+        object-fit: contain;
+      }
+      .preview .nm {
+        font-size: 14px;
+        margin-top: 6px;
+      }
+      .preview .sub {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .variants {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        justify-content: center;
+        margin-top: 10px;
+      }
+      .variants img {
+        width: 34px;
+        height: 34px;
+        object-fit: contain;
+        background: #0004;
+        border: 2px solid transparent;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .variants img.sel {
+        border-color: var(--accent);
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        margin-top: 12px;
+        cursor: pointer;
+      }
+      .opt input {
+        accent-color: var(--accent);
+      }
+      .hint {
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.5;
+        margin-top: 10px;
+      }
+      .spacer {
+        flex: 1;
+      }
+      .footer {
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.4;
+      }
+      .footer b {
+        color: var(--ink);
+      }
+      button {
+        background: var(--accent);
+        color: #10141a;
+        border: 0;
+        border-radius: 7px;
+        padding: 9px;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        width: 100%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+      }
+      .ic {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 auto;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      button.ghost {
+        background: transparent;
+        color: var(--ink);
+        border: 1px solid var(--border);
+        font-weight: 500;
+      }
+      button.danger {
+        background: #c0584e;
+        color: #fff;
+        margin-top: 8px;
+      }
+      .pbtns {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 10px;
+      }
+      /* barre d'outils verticale */
+      .toolbar {
+        width: 56px;
+        flex: 0 0 56px;
+        background: #0c0f14;
+        border-left: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 14px 0;
+        gap: 6px;
+      }
+      .tbtn {
+        width: 40px;
+        height: 40px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 19px;
+        color: var(--accent);
+        cursor: pointer;
+        border: 1px solid transparent;
+        background: transparent;
+        position: relative;
+      }
+      .tbtn svg {
+        width: 20px;
+        height: 20px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .tbtn:hover {
+        background: #ffffff10;
+      }
+      .tbtn.active {
+        background: #ffffff14;
+        border-color: var(--accent);
+      }
+      .tbtn.disabled {
+        color: #4a525e;
+        cursor: not-allowed;
+      }
+      .toolbar .spacer {
+        flex: 1;
+        width: 1px;
+      }
+      .toolbar .tdiv {
+        width: 24px;
+        height: 1px;
+        background: var(--border);
+        margin: 2px 0;
+        flex: 0 0 auto;
+      }
+      #panelToggle svg {
+        transition: transform 0.18s ease;
+      }
+      #panelToggle.flipped svg {
+        transform: rotate(180deg);
+      }
+      /* menu réglages (popover) */
+      .settings-menu {
+        position: fixed;
+        right: 64px;
+        bottom: 14px;
+        width: 212px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 8px;
+        display: none;
+        flex-direction: column;
+        gap: 6px;
+        z-index: 40;
+        box-shadow: 0 10px 30px #000a;
+      }
+      .settings-menu.open {
+        display: flex;
+      }
+      .settings-menu .sm-title {
+        font-size: 11px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: 2px 2px 4px;
+      }
+      .settings-menu .sm-dims {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+      .settings-menu .sm-dims label {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .settings-menu .sm-dims input {
+        width: 100%;
+        background: var(--panel2);
+        color: var(--ink);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 6px;
+        font-size: 13px;
+      }
+      .settings-menu hr {
+        border: 0;
+        border-top: 1px solid var(--border);
+        margin: 4px 0;
+      }
+      /* modale catalogue */
+      .modal {
+        position: fixed;
+        inset: 0;
+        background: #0b0e12ee;
+        z-index: 50;
+        display: none;
+        flex-direction: column;
+        padding: 18px 26px;
+      }
+      .modal.open {
+        display: flex;
+      }
+      .modal .mhead {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 8px;
+      }
+      .modal h2 {
+        margin: 0;
+        font-size: 22px;
+      }
+      .modal .msearch {
+        flex: 1;
+      }
+      .modal .msearch input {
+        width: 100%;
+        max-width: 340px;
+        background: var(--panel2);
+        color: var(--ink);
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        padding: 7px 10px;
+        font-size: 13px;
+      }
+      .modal .close {
+        margin-left: auto;
+        font-size: 26px;
+        cursor: pointer;
+        color: var(--muted);
+        background: none;
+        border: 0;
+        width: auto;
+      }
+      .modal .mbody {
+        overflow-y: auto;
+        flex: 1;
+      }
+      .mgroup h3 {
+        font-size: 17px;
+        margin: 18px 0 10px;
+        color: var(--ink);
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+        gap: 10px;
+      }
+      .card {
+        position: relative;
+        aspect-ratio: 1;
+        background: var(--panel2);
+        border: 2px solid var(--border);
+        border-radius: 9px;
+        cursor: pointer;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .card:hover {
+        border-color: #ffffff66;
+      }
+      .card.sel {
+        border-color: var(--accent);
+      }
+      .card img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      .card .badge {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        background: #000a;
+        color: #fff;
+        font-size: 10px;
+        padding: 1px 6px;
+        border-radius: 8px;
+      }
+      .card .lbl {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: #000a;
+        color: #fff;
+        font-size: 10px;
+        padding: 2px 4px;
+        text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .toast {
+        position: fixed;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #000d;
+        padding: 7px 16px;
+        border-radius: 20px;
+        font-size: 12px;
+        z-index: 60;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <!-- CANVAS -->
+      <main class="stage"><div id="svgWrap"></div></main>
 
-  <!-- CANVAS -->
-  <main class="stage"><div id="svgWrap"></div></main>
+      <!-- PANNEAU CONTEXTUEL -->
+      <aside class="panel" id="panel"></aside>
 
-  <!-- PANNEAU CONTEXTUEL -->
-  <aside class="panel" id="panel"></aside>
+      <!-- BARRE D'OUTILS -->
+      <nav class="toolbar" id="toolbar">
+        <button class="tbtn" data-tool="tiles" title="Tuiles">
+          <svg viewBox="0 0 24 24">
+            <path
+              d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
+            />
+          </svg>
+        </button>
+        <button
+          class="tbtn disabled"
+          data-tool="roads"
+          title="Routes (à venir)"
+        >
+          <svg viewBox="0 0 24 24">
+            <circle cx="6" cy="19" r="3" />
+            <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" />
+            <circle cx="18" cy="5" r="3" />
+          </svg>
+        </button>
+        <button
+          class="tbtn disabled"
+          data-tool="rivers"
+          title="Rivières (à venir)"
+        >
+          <svg viewBox="0 0 24 24">
+            <path d="M2 6q2.5 2 5 0t5 0 5 0 5 0" />
+            <path d="M2 12q2.5 2 5 0t5 0 5 0 5 0" />
+            <path d="M2 18q2.5 2 5 0t5 0 5 0 5 0" />
+          </svg>
+        </button>
+        <button class="tbtn" data-tool="objects" title="Objets">
+          <svg viewBox="0 0 24 24">
+            <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
+            <path
+              d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+            />
+          </svg>
+        </button>
+        <button
+          class="tbtn disabled"
+          data-tool="regions"
+          title="Régions (à venir)"
+        >
+          <svg viewBox="0 0 24 24">
+            <path
+              d="M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z"
+            />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <circle cx="17.5" cy="17.5" r="3.5" />
+          </svg>
+        </button>
+        <button
+          class="tbtn disabled"
+          data-tool="texts"
+          title="Textes (à venir)"
+        >
+          <svg viewBox="0 0 24 24">
+            <path d="M12 4v16" />
+            <path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2" />
+            <path d="M9 20h6" />
+          </svg>
+        </button>
+        <div class="spacer"></div>
+        <button class="tbtn" id="gridBtn" title="Afficher/masquer la grille">
+          <svg viewBox="0 0 24 24">
+            <rect width="18" height="18" x="3" y="3" rx="2" />
+            <path d="M3 9h18" />
+            <path d="M3 15h18" />
+            <path d="M9 3v18" />
+            <path d="M15 3v18" />
+          </svg>
+        </button>
+        <button class="tbtn" id="settingsBtn" title="Réglages">
+          <svg viewBox="0 0 24 24">
+            <path
+              d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+            />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        </button>
+        <div class="tdiv"></div>
+        <button
+          class="tbtn"
+          id="panelToggle"
+          title="Replier / déplier le panneau"
+        >
+          <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></svg>
+        </button>
+      </nav>
+    </div>
 
-  <!-- BARRE D'OUTILS -->
-  <nav class="toolbar" id="toolbar">
-    <button class="tbtn" data-tool="tiles"   title="Tuiles">⬡</button>
-    <button class="tbtn disabled" data-tool="roads"  title="Routes (à venir)">🛣</button>
-    <button class="tbtn disabled" data-tool="rivers" title="Rivières (à venir)">〰</button>
-    <button class="tbtn" data-tool="objects" title="Objets">🏠</button>
-    <button class="tbtn disabled" data-tool="regions" title="Régions (à venir)">▣</button>
-    <button class="tbtn disabled" data-tool="texts"  title="Textes (à venir)">🅣</button>
-    <div class="spacer"></div>
-    <button class="tbtn" id="gridBtn" title="Afficher/masquer la grille">▦</button>
-  </nav>
-</div>
+    <!-- MENU RÉGLAGES -->
+    <div class="settings-menu" id="settingsMenu"></div>
 
-<!-- MODALE CATALOGUE -->
-<div class="modal" id="modal">
-  <div class="mhead">
-    <h2 id="modalTitle">Catalogue</h2>
-    <div class="msearch"><input type="text" id="modalSearch" placeholder="Filtrer par nom…"></div>
-    <button class="close" id="modalClose">×</button>
-  </div>
-  <div class="mbody" id="modalBody"></div>
-</div>
-
-<div class="toast" id="toast" style="display:none"></div>
-
-<script src="catalog.js"></script>
-<script>
-"use strict";
-const CAT = window.CATALOG || {tiles:[],objects:[]};
-
-/* index id -> item */
-const TILES_BY_ID = new Map(), OBJ_BY_ID = new Map();
-for(const g of CAT.tiles) for(const it of g.items){ it._group=g.group; TILES_BY_ID.set(it.id,it); }
-for(const g of CAT.objects) for(const it of g.items){ it._group=g.group; OBJ_BY_ID.set(it.id,it); }
-
-/* ---- géométrie (identique au générateur, silhouette réelle) ---- */
-const TILE_W=256, TILE_H=384, COL=256, ROW=192, XOFF=128, ANCHOR_Y=300;
-const HEX_LOCAL=[[128,124],[256,191],[256,321],[128,383],[0,321],[0,191]];
-const url = p => encodeURI(p);
-const isFull = it => it.w===256 && it.h===384;
-function tileXY(col,row){return {x:col*COL+((row&1)?XOFF:0), y:row*ROW};}
-function hexPolyTile(tx,ty){return HEX_LOCAL.map(v=>(tx+v[0])+","+(ty+v[1])).join(" ");}
-
-/* ---- état ---- */
-const state = {
-  cols:14, rows:11, zoom:0.42, showGrid:true,
-  tool:"tiles", erase:false,
-  cells:new Map(),            // "c,r" -> {terrain:{id,v}|null, objects:[{id,v}]}
-  brushTile:null, tileVar:0,  // item + variante courante
-  brushObj:null, objRandom:true,
-};
-const key=(c,r)=>c+","+r;
-
-/* default brushes */
-state.brushTile = CAT.tiles[0] && CAT.tiles[0].items[0];
-state.brushObj  = CAT.objects[0] && CAT.objects[0].items[0];
-
-/* =================== RENDU CANVAS =================== */
-function terrainPath(t){const it=TILES_BY_ID.get(t.id); if(!it)return null; return it.variants[Math.min(t.v,it.variants.length-1)];}
-function objItemVar(o){const it=OBJ_BY_ID.get(o.id); if(!it)return null; return {it, path:it.variants[Math.min(o.v,it.variants.length-1)]};}
-
-function cellInner(c){
-  if(!c) return "";
-  let s="";
-  if(c.terrain){ const p=terrainPath(c.terrain); if(p) s+=`<image href="${url(p)}" x="${c._tx}" y="${c._ty}" width="${TILE_W}" height="${TILE_H}"/>`; }
-  for(const o of c.objects){
-    const r=objItemVar(o); if(!r) continue;
-    if(isFull(r.it)) s+=`<image href="${url(r.path)}" x="${c._tx}" y="${c._ty}" width="${TILE_W}" height="${TILE_H}"/>`;
-    else { const x=(c._tx+128-r.it.w/2).toFixed(1), y=(c._ty+ANCHOR_Y-r.it.h).toFixed(1);
-      s+=`<image href="${url(r.path)}" x="${x}" y="${y}" width="${r.it.w}" height="${r.it.h}"/>`; }
-  }
-  return s;
-}
-function render(){
-  const vbW=state.cols*COL+XOFF, vbH=(state.rows-1)*ROW+TILE_H;
-  let body="", grid="", hit="";
-  for(let row=0;row<state.rows;row++) for(let col=0;col<state.cols;col++){
-    const t=tileXY(col,row), k=key(col,row), c=state.cells.get(k);
-    if(c){ c._tx=t.x; c._ty=t.y; }
-    body+=`<g class="cell" data-k="${k}">${cellInner(c)}</g>`;
-    if(state.showGrid) grid+=`<polygon class="gridline" points="${hexPolyTile(t.x,t.y)}"/>`;
-    hit+=`<polygon class="hit" data-col="${col}" data-row="${row}" points="${hexPolyTile(t.x,t.y)}"/>`;
-  }
-  document.getElementById('svgWrap').innerHTML =
-    `<svg id="svg" viewBox="0 0 ${vbW} ${vbH}" width="${(vbW*state.zoom)|0}" height="${(vbH*state.zoom)|0}">${body}${grid}${hit}</svg>`;
-  bindCanvas();
-}
-function updateCell(col,row){
-  const k=key(col,row), t=tileXY(col,row), c=state.cells.get(k);
-  if(c){ c._tx=t.x; c._ty=t.y; }
-  const g=document.querySelector(`g.cell[data-k="${CSS.escape(k)}"]`);
-  if(g) g.innerHTML=cellInner(c); else render();
-}
-
-/* =================== PEINTURE =================== */
-let painting=false, stroke=new Set();
-function getCell(k,create){ let c=state.cells.get(k); if(!c && create){c={terrain:null,objects:[]};state.cells.set(k,c);} return c; }
-function pruneCell(k){ const c=state.cells.get(k); if(c && !c.terrain && c.objects.length===0) state.cells.delete(k); }
-
-function applyAt(col,row,isClick){
-  const k=key(col,row);
-  if(state.tool==="tiles"){
-    if(state.erase){ const c=getCell(k); if(c){c.terrain=null;pruneCell(k);} }
-    else {
-      if(!state.brushTile) return;
-      const c=getCell(k,true), n=state.brushTile.variants.length;
-      c.terrain={id:state.brushTile.id, v: state.tileVar % n};   // pose la variante courante
-      state.tileVar=(state.tileVar+1)%n;                          // … puis avance automatiquement
-      refreshTilePreview();
-    }
-  } else if(state.tool==="objects"){
-    if(state.erase){ const c=getCell(k); if(c){c.objects.pop();pruneCell(k);} }
-    else {
-      if(!state.brushObj) return;
-      const c=getCell(k,true), n=state.brushObj.variants.length;
-      const v = state.objRandom ? (Math.random()*n|0) : 0;
-      c.objects.push({id:state.brushObj.id, v});
-    }
-  }
-  updateCell(col,row); scheduleSave();
-}
-function clearCell(col,row){ state.cells.delete(key(col,row)); updateCell(col,row); scheduleSave(); }
-
-function bindCanvas(){
-  document.querySelectorAll('.hit').forEach(el=>{
-    const col=+el.dataset.col, row=+el.dataset.row;
-    el.addEventListener('mousedown',e=>{ if(e.button===2)return; e.preventDefault(); painting=true; stroke=new Set([col+','+row]); applyAt(col,row,true); });
-    el.addEventListener('mouseover',()=>{ if(painting && !stroke.has(col+','+row)){ stroke.add(col+','+row); applyAt(col,row,false); } });
-    el.addEventListener('contextmenu',e=>{ e.preventDefault(); clearCell(col,row); });
-  });
-}
-window.addEventListener('mouseup',()=>painting=false);
-
-/* =================== PANNEAUX =================== */
-function renderPanel(){
-  const p=document.getElementById('panel');
-  const footer=`<div class="spacer"></div><div class="footer"><b>Hex Editor</b><br>Construis ta carte à la main.<br>Clic = poser · glisser = peindre · clic droit = vider la case.</div>
-    <div class="pbtns"><button class="ghost" id="saveBtn">⤓ Enregistrer (.json)</button><button class="ghost" id="loadBtn">⤒ Charger</button>
-    <button class="ghost" id="pngBtn">⤓ Export PNG</button><a href="index.html" style="text-decoration:none"><button class="ghost" style="margin-top:6px">← Générateur</button></a>
-    <button class="danger" id="clearBtn">🗑 Tout effacer</button></div>`;
-  if(state.tool==="tiles"){
-    const it=state.brushTile;
-    p.innerHTML=`<h2>Tuiles</h2>
-      <label class="erase"><input type="checkbox" id="eraseChk" ${state.erase?'checked':''}> ◇ Gomme</label>
-      <div class="preview" id="catOpen">
-        ${it?`<img id="tilePrevImg" src="${url(it.variants[Math.min(state.tileVar,it.variants.length-1)])}"><div class="nm">${it.name}</div><div class="sub">${it._group}${it.variants.length>1?' · ×'+it.variants.length+' variantes':''}</div>`:'<div class="sub">Aucune tuile</div>'}
+    <!-- MODALE CATALOGUE -->
+    <div class="modal" id="modal">
+      <div class="mhead">
+        <h2 id="modalTitle">Catalogue</h2>
+        <div class="msearch">
+          <input type="text" id="modalSearch" placeholder="Filtrer par nom…" />
+        </div>
+        <button class="close" id="modalClose">×</button>
       </div>
-      <div class="hint">Clique l'aperçu pour ouvrir le catalogue. Chaque clic sur la carte pose une variante puis passe automatiquement à la suivante (l'aperçu change).</div>
-      ${footer}`;
-    document.getElementById('catOpen').onclick=()=>openCatalog('tiles');
-  } else if(state.tool==="objects"){
-    const it=state.brushObj;
-    let vthumbs="";
-    if(it && it.variants.length>1) vthumbs=`<div class="variants">${it.variants.map((v,i)=>`<img src="${url(v)}" title="variante ${i+1}">`).join("")}</div>`;
-    p.innerHTML=`<h2>Objets</h2>
-      <label class="erase"><input type="checkbox" id="eraseChk" ${state.erase?'checked':''}> ◇ Gomme</label>
+      <div class="mbody" id="modalBody"></div>
+    </div>
+
+    <div class="toast" id="toast" style="display: none"></div>
+
+    <script src="catalog.js"></script>
+    <script>
+      "use strict";
+      const CAT = window.CATALOG || { tiles: [], objects: [] };
+
+      /* déduplique les variantes pointant vers le même visuel (même nom de fichier,
+         ex. hexPlains00.png présent dans deux packs) pour éviter les répétitions */
+      function dedupeVariants(it) {
+        const seen = new Set(),
+          out = [];
+        for (const v of it.variants) {
+          const base = v.split("/").pop().toLowerCase();
+          if (!seen.has(base)) {
+            seen.add(base);
+            out.push(v);
+          }
+        }
+        it.variants = out;
+      }
+
+      /* index id -> item */
+      const TILES_BY_ID = new Map(),
+        OBJ_BY_ID = new Map();
+      for (const g of CAT.tiles)
+        for (const it of g.items) {
+          it._group = g.group;
+          dedupeVariants(it);
+          TILES_BY_ID.set(it.id, it);
+        }
+      for (const g of CAT.objects)
+        for (const it of g.items) {
+          it._group = g.group;
+          dedupeVariants(it);
+          OBJ_BY_ID.set(it.id, it);
+        }
+
+      /* ---- géométrie (identique au générateur, silhouette réelle) ---- */
+      const TILE_W = 256,
+        TILE_H = 384,
+        COL = 256,
+        ROW = 192,
+        XOFF = 128,
+        ANCHOR_Y = 300;
+      const HEX_LOCAL = [
+        [128, 124],
+        [256, 191],
+        [256, 316],
+        [128, 383],
+        [0, 316],
+        [0, 191],
+      ];
+      const url = (p) => encodeURI(p);
+      const isFull = (it) => it.w === 256 && it.h === 384;
+      const PAD = 16; // marge de grille non-cliquable autour de la zone active (canvas "infini")
+      function tileXY(col, row) {
+        return { x: col * COL + (row & 1 ? XOFF : 0), y: row * ROW };
+      }
+      function hexPolyTile(tx, ty) {
+        return HEX_LOCAL.map((v) => tx + v[0] + "," + (ty + v[1])).join(" ");
+      }
+
+      /* ---- état ---- */
+      const state = {
+        cols: 60,
+        rows: 44,
+        zoom: 0.42,
+        showGrid: true,
+        tool: "tiles",
+        erase: false,
+        cells: new Map(), // "c,r" -> {terrain:{id,v}|null, objects:[{id,v}]}
+        brushTile: null,
+        tileVar: 0, // item + variante courante
+        brushObj: null,
+        objRandom: true,
+        objVar: 0, // variante d'objet choisie manuellement (si objRandom = false)
+      };
+      const key = (c, r) => c + "," + r;
+
+      /* default brushes */
+      state.brushTile = CAT.tiles[0] && CAT.tiles[0].items[0];
+      state.brushObj = CAT.objects[0] && CAT.objects[0].items[0];
+      if (state.brushTile && state.brushTile.variants.length > 1)
+        state.tileVar = (Math.random() * state.brushTile.variants.length) | 0; // démarre le cycle au hasard
+
+      /* =================== RENDU CANVAS =================== */
+      function terrainPath(t) {
+        const it = TILES_BY_ID.get(t.id);
+        if (!it) return null;
+        return it.variants[Math.min(t.v, it.variants.length - 1)];
+      }
+      function objItemVar(o) {
+        const it = OBJ_BY_ID.get(o.id);
+        if (!it) return null;
+        return { it, path: it.variants[Math.min(o.v, it.variants.length - 1)] };
+      }
+
+      function cellInner(c) {
+        if (!c) return "";
+        let s = "";
+        if (c.terrain) {
+          const p = terrainPath(c.terrain);
+          if (p)
+            s += `<image href="${url(p)}" x="${c._tx}" y="${c._ty}" width="${TILE_W}" height="${TILE_H}"/>`;
+        }
+        for (const o of c.objects) {
+          const r = objItemVar(o);
+          if (!r) continue;
+          if (isFull(r.it))
+            s += `<image href="${url(r.path)}" x="${c._tx}" y="${c._ty}" width="${TILE_W}" height="${TILE_H}"/>`;
+          else {
+            const ox = o.ox != null ? o.ox : 128,
+              oy = o.oy != null ? o.oy : ANCHOR_Y; // ox/oy = point d'ancrage (base-centre) du tampon
+            const x = (c._tx + ox - r.it.w / 2).toFixed(1),
+              y = (c._ty + oy - r.it.h).toFixed(1);
+            s += `<image href="${url(r.path)}" x="${x}" y="${y}" width="${r.it.w}" height="${r.it.h}"/>`;
+          }
+        }
+        return s;
+      }
+      function render() {
+        const c0 = -PAD,
+          c1 = state.cols - 1 + PAD,
+          r0 = -PAD,
+          r1 = state.rows - 1 + PAD;
+        const vbX = c0 * COL,
+          vbY = r0 * ROW;
+        const vbW = c1 * COL + XOFF + TILE_W - vbX,
+          vbH = r1 * ROW + TILE_H - vbY;
+        state._vb = { x: vbX, y: vbY, w: vbW, h: vbH }; // mémorisé pour le zoom (évite de tout reconstruire)
+        let body = "",
+          grid = "",
+          hit = "";
+        for (let row = r0; row <= r1; row++)
+          for (let col = c0; col <= c1; col++) {
+            const t = tileXY(col, row);
+            const active =
+              col >= 0 && col < state.cols && row >= 0 && row < state.rows;
+            if (active) {
+              const k = key(col, row),
+                c = state.cells.get(k);
+              if (c) {
+                c._tx = t.x;
+                c._ty = t.y;
+              }
+              body += `<g class="cell" data-k="${k}">${cellInner(c)}</g>`;
+              if (state.showGrid)
+                grid += `<polygon class="gridline" data-gk="${k}" points="${hexPolyTile(t.x, t.y)}"${c && c.terrain ? ' style="display:none"' : ""}/>`;
+              hit += `<polygon class="hit" data-col="${col}" data-row="${row}" points="${hexPolyTile(t.x, t.y)}"/>`;
+            } else if (state.showGrid) {
+              // marge : grille visible mais non-cliquable (pas de placement)
+              grid += `<polygon class="gridline pad" points="${hexPolyTile(t.x, t.y)}"/>`;
+            }
+          }
+        document.getElementById("svgWrap").innerHTML =
+          `<svg id="svg" viewBox="${vbX} ${vbY} ${vbW} ${vbH}" width="${(vbW * state.zoom) | 0}" height="${(vbH * state.zoom) | 0}">${grid}${body}<g id="ghost"></g>${hit}</svg>`;
+        bindCanvas();
+      }
+      function updateCell(col, row) {
+        const k = key(col, row),
+          t = tileXY(col, row),
+          c = state.cells.get(k);
+        if (c) {
+          c._tx = t.x;
+          c._ty = t.y;
+        }
+        const g = document.querySelector(`g.cell[data-k="${CSS.escape(k)}"]`);
+        if (g) g.innerHTML = cellInner(c);
+        else render();
+        const gl = document.querySelector(
+          `polygon.gridline[data-gk="${CSS.escape(k)}"]`,
+        );
+        if (gl) gl.style.display = c && c.terrain ? "none" : "";
+      }
+
+      /* =================== HISTORIQUE (undo/redo) =================== */
+      const HIST_LIMIT = 30; // nombre d'étapes mémorisées
+      let undoStack = [],
+        redoStack = [],
+        strokeBefore = null; // snapshot pris au début d'un tracé
+      const snap = () => JSON.stringify(serialize());
+      function pushUndo(prev) {
+        undoStack.push(prev);
+        if (undoStack.length > HIST_LIMIT) undoStack.shift();
+        redoStack.length = 0; // toute nouvelle action efface le redo
+      }
+      function restoreSnap(str) {
+        deserialize(JSON.parse(str)); // remplace les cellules + rend
+        scheduleSave();
+      }
+      function undo() {
+        if (!undoStack.length) return;
+        redoStack.push(snap());
+        restoreSnap(undoStack.pop());
+      }
+      function redo() {
+        if (!redoStack.length) return;
+        undoStack.push(snap());
+        restoreSnap(redoStack.pop());
+      }
+      /* exécute une action ponctuelle en enregistrant l'état d'avant si ça change */
+      function withHistory(fn) {
+        const before = snap();
+        fn();
+        if (snap() !== before) pushUndo(before);
+      }
+
+      /* =================== PEINTURE =================== */
+      let painting = false,
+        stroke = new Set();
+      function getCell(k, create) {
+        let c = state.cells.get(k);
+        if (!c && create) {
+          c = { terrain: null, objects: [] };
+          state.cells.set(k, c);
+        }
+        return c;
+      }
+      function pruneCell(k) {
+        const c = state.cells.get(k);
+        if (c && !c.terrain && c.objects.length === 0) state.cells.delete(k);
+      }
+
+      /* convertit la position d'un événement souris en coordonnées SVG (tient compte du zoom et du défilement) */
+      function eventToSvg(e) {
+        const svg = document.getElementById("svg");
+        if (!svg || !svg.getScreenCTM) return null;
+        const m = svg.getScreenCTM();
+        if (!m) return null;
+        const pt = svg.createSVGPoint();
+        pt.x = e.clientX;
+        pt.y = e.clientY;
+        const p = pt.matrixTransform(m.inverse());
+        return { x: p.x, y: p.y };
+      }
+
+      function applyAt(col, row, isClick, pt) {
+        const k = key(col, row);
+        if (state.tool === "tiles") {
+          if (state.erase) {
+            const c = getCell(k);
+            if (c) {
+              c.terrain = null;
+              pruneCell(k);
+            }
+          } else {
+            if (!state.brushTile) return;
+            const c = getCell(k, true),
+              n = state.brushTile.variants.length;
+            c.terrain = { id: state.brushTile.id, v: state.tileVar % n }; // pose la variante courante
+            state.tileVar = (state.tileVar + 1) % n; // … puis avance automatiquement
+            refreshTilePreview();
+          }
+        } else if (state.tool === "objects") {
+          if (state.erase) {
+            const c = getCell(k);
+            if (c) {
+              c.objects.pop();
+              pruneCell(k);
+            }
+          } else {
+            if (!state.brushObj) return;
+            const c = getCell(k, true),
+              n = state.brushObj.variants.length;
+            const v = nextObjVar(state.brushObj); // variante pré-tirée (= celle du fantôme)
+            if (state._pendingObjVar != null)
+              state._pendingObjVar = (Math.random() * n) | 0; // re-tire pour le prochain
+            if (isFull(state.brushObj) || !pt) {
+              // objet plein-tuile : reste calé sur le hex
+              c.objects.push({ id: state.brushObj.id, v });
+            } else {
+              // mode tampon : à l'endroit exact du clic
+              const t = tileXY(col, row);
+              c.objects.push({
+                id: state.brushObj.id,
+                v,
+                ox: +(pt.x - t.x).toFixed(1),
+                oy: +(pt.y - t.y).toFixed(1),
+              });
+            }
+          }
+        }
+        updateCell(col, row);
+        scheduleSave();
+      }
+      function clearCell(col, row) {
+        state.cells.delete(key(col, row));
+        updateCell(col, row);
+        scheduleSave();
+      }
+
+      /* variante d'objet qui sera réellement posée (tirage différé en mode aléatoire,
+         pour que le fantôme corresponde exactement au prochain placement) */
+      function nextObjVar(it) {
+        const n = it.variants.length;
+        if (!state.objRandom) return Math.min(state.objVar, n - 1);
+        if (state._pendingObjVar == null || state._pendingObjVar >= n)
+          state._pendingObjVar = (Math.random() * n) | 0;
+        return state._pendingObjVar;
+      }
+
+      /* aperçu translucide de la tuile/objet qui sera posé sous le curseur */
+      function ghostMarkup(col, row) {
+        const t = tileXY(col, row);
+        if (state.erase) return ""; // pas d'aperçu en mode gomme
+        if (state.tool === "tiles") {
+          const it = state.brushTile;
+          if (!it) return "";
+          const p =
+            it.variants[Math.min(state.tileVar, it.variants.length - 1)];
+          return `<image href="${url(p)}" x="${t.x}" y="${t.y}" width="${TILE_W}" height="${TILE_H}"/>`;
+        } else if (state.tool === "objects") {
+          const it = state.brushObj;
+          if (!it) return "";
+          const p = it.variants[nextObjVar(it)];
+          if (isFull(it))
+            return `<image href="${url(p)}" x="${t.x}" y="${t.y}" width="${TILE_W}" height="${TILE_H}"/>`;
+          const x = (t.x + 128 - it.w / 2).toFixed(1),
+            y = (t.y + ANCHOR_Y - it.h).toFixed(1);
+          return `<image href="${url(p)}" x="${x}" y="${y}" width="${it.w}" height="${it.h}"/>`;
+        }
+        return "";
+      }
+      function setGhost(col, row) {
+        const g = document.getElementById("ghost");
+        if (!g) return;
+        g.innerHTML =
+          painting || spaceHeld || panning2 ? "" : ghostMarkup(col, row);
+      }
+      function clearGhost() {
+        const g = document.getElementById("ghost");
+        if (g) g.innerHTML = "";
+      }
+
+      function bindCanvas() {
+        document.querySelectorAll(".hit").forEach((el) => {
+          const col = +el.dataset.col,
+            row = +el.dataset.row;
+          el.addEventListener("mousedown", (e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            painting = true;
+            strokeBefore = snap(); // état avant le tracé (groupe tout le glisser en 1 entrée)
+            clearGhost();
+            stroke = new Set([col + "," + row]);
+            applyAt(col, row, true, eventToSvg(e));
+          });
+          el.addEventListener("mouseover", (e) => {
+            if (painting) {
+              if (!stroke.has(col + "," + row)) {
+                stroke.add(col + "," + row);
+                applyAt(col, row, false, eventToSvg(e));
+              }
+            } else if (
+              state.tool === "tiles" ||
+              (state.tool === "objects" &&
+                state.brushObj &&
+                isFull(state.brushObj))
+            )
+              setGhost(col, row);
+          });
+          el.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            withHistory(() => clearCell(col, row));
+          });
+        });
+      }
+      window.addEventListener("mouseup", () => {
+        if (!painting) return;
+        painting = false;
+        if (strokeBefore != null) {
+          if (snap() !== strokeBefore) pushUndo(strokeBefore); // valide le tracé
+          strokeBefore = null;
+        }
+      });
+
+      /* =================== PANNEAUX =================== */
+      /* icônes Lucide inlinées (stroke = currentColor, dimensionnées via .ic) */
+      const ICONS = {
+        eraser:
+          '<path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/>',
+        shuffle:
+          '<path d="m18 14 4 4-4 4"/><path d="m18 2 4 4-4 4"/><path d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6a4 4 0 0 1 3.3-1.7H22"/><path d="M2 6h1.972a4 4 0 0 1 3.6 2.2"/><path d="M22 18h-6.041a4 4 0 0 1-3.3-1.8l-.359-.45"/>',
+        download:
+          '<path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/>',
+        upload:
+          '<path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>',
+        image:
+          '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
+        back: '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+        trash:
+          '<path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+      };
+      const ic = (n) =>
+        `<svg class="ic" viewBox="0 0 24 24">${ICONS[n] || ""}</svg>`;
+
+      function renderPanel() {
+        const p = document.getElementById("panel");
+        // pied de panneau commun (toujours visible quel que soit l'outil)
+        const footer = `<div class="spacer"></div><button class="danger" id="clearBtn">${ic("trash")} Tout effacer</button>`;
+        if (state.tool === "tiles") {
+          const it = state.brushTile;
+          p.innerHTML = `<h2>Tuiles</h2>
+      <label class="erase"><input type="checkbox" id="eraseChk" ${state.erase ? "checked" : ""}> ${ic("eraser")} Gomme</label>
       <div class="preview" id="catOpen">
-        ${it?`<img src="${url(it.variants[0])}"><div class="nm">${it.name}</div><div class="sub">${it._group}${it.variants.length>1?' · ×'+it.variants.length:''}</div>`:'<div class="sub">Aucun objet</div>'}
+        ${it ? `<img id="tilePrevImg" src="${url(it.variants[Math.min(state.tileVar, it.variants.length - 1)])}"><div class="nm">${it.name}</div><div class="sub">${it._group}${it.variants.length > 1 ? " · ×" + it.variants.length + " variantes" : ""}</div>` : '<div class="sub">Aucune tuile</div>'}
+      </div>
+      ${footer}`;
+          document.getElementById("catOpen").onclick = () =>
+            openCatalog("tiles");
+        } else if (state.tool === "objects") {
+          const it = state.brushObj;
+          const hasVariants = it && it.variants.length > 1;
+          const selVar = state.objRandom ? -1 : state.objVar; // -1 = aucune (mode aléatoire)
+          const prevSrc = it
+            ? url(
+                it.variants[
+                  state.objRandom
+                    ? 0
+                    : Math.min(state.objVar, it.variants.length - 1)
+                ],
+              )
+            : "";
+          let vthumbs = "";
+          if (hasVariants)
+            vthumbs = `<div class="variants">${it.variants.map((v, i) => `<img class="${i === selVar ? "sel" : ""}" data-i="${i}" src="${url(v)}" title="variante ${i + 1}">`).join("")}</div>`;
+          const randOpt = hasVariants
+            ? `<label class="opt"><input type="checkbox" id="randChk" ${state.objRandom ? "checked" : ""}> ${ic("shuffle")} Variante aléatoire</label>`
+            : "";
+          p.innerHTML = `<h2>Objets</h2>
+      <label class="erase"><input type="checkbox" id="eraseChk" ${state.erase ? "checked" : ""}> ${ic("eraser")} Gomme</label>
+      <div class="preview" id="catOpen">
+        ${it ? `<img src="${prevSrc}"><div class="nm">${it.name}</div><div class="sub">${it._group}${it.variants.length > 1 ? " · ×" + it.variants.length : ""}</div>` : '<div class="sub">Aucun objet</div>'}
       </div>
       ${vthumbs}
-      <label class="opt"><input type="checkbox" id="randChk" ${state.objRandom?'checked':''}> ⤬ Variante aléatoire</label>
-      <div class="hint">Les objets se posent par-dessus le terrain et s'empilent. Gomme = retire le dernier objet.</div>
+      ${randOpt}
       ${footer}`;
-    document.getElementById('catOpen').onclick=()=>openCatalog('objects');
-    const rc=document.getElementById('randChk'); if(rc) rc.onchange=e=>state.objRandom=e.target.checked;
-  }
-  const ec=document.getElementById('eraseChk'); if(ec) ec.onchange=e=>state.erase=e.target.checked;
-  document.getElementById('saveBtn').onclick=saveMap;
-  document.getElementById('loadBtn').onclick=loadMap;
-  document.getElementById('pngBtn').onclick=exportPNG;
-  document.getElementById('clearBtn').onclick=()=>{ if(confirm("Tout effacer ?")){state.cells.clear();render();scheduleSave();} };
-}
+          document.getElementById("catOpen").onclick = () =>
+            openCatalog("objects");
+          const rc = document.getElementById("randChk");
+          if (rc)
+            rc.onchange = (e) => {
+              state.objRandom = e.target.checked;
+              state._pendingObjVar = null; // nouveau tirage pour l'aperçu
+              renderPanel();
+            };
+          // clic sur une vignette = choisir cette variante (et désactiver l'aléatoire)
+          p.querySelectorAll(".variants img").forEach((im) => {
+            im.onclick = () => {
+              state.objVar = +im.dataset.i;
+              state.objRandom = false;
+              renderPanel();
+            };
+          });
+        }
+        const ec = document.getElementById("eraseChk");
+        if (ec) ec.onchange = (e) => (state.erase = e.target.checked);
+        document.getElementById("clearBtn").onclick = clearAllMap;
+      }
+      function clearAllMap() {
+        if (confirm("Tout effacer ?"))
+          withHistory(() => {
+            state.cells.clear();
+            render();
+            scheduleSave();
+          });
+      }
 
-/* =================== CATALOGUE (MODALE) =================== */
-let catalogMode="tiles";
-function openCatalog(mode){
-  catalogMode=mode;
-  document.getElementById('modalTitle').textContent = mode==="tiles"?"Tile Catalog":"Object Catalog";
-  document.getElementById('modalSearch').value="";
-  renderCatalog("");
-  document.getElementById('modal').classList.add('open');
-}
-function renderCatalog(q){
-  q=(q||"").toLowerCase();
-  const groups = catalogMode==="tiles"?CAT.tiles:CAT.objects;
-  const selId = catalogMode==="tiles"?(state.brushTile&&state.brushTile.id):(state.brushObj&&state.brushObj.id);
-  let html="";
-  for(const g of groups){
-    const items=g.items.filter(it=>!q || it.name.toLowerCase().includes(q) || it.id.toLowerCase().includes(q));
-    if(!items.length) continue;
-    html+=`<div class="mgroup"><h3>${g.group}</h3><div class="cards">`;
-    for(const it of items){
-      html+=`<div class="card${it.id===selId?' sel':''}" data-id="${it.id}" title="${it.name} (${it.w}×${it.h})">
+      /* =================== CATALOGUE (MODALE) =================== */
+      let catalogMode = "tiles";
+      function openCatalog(mode) {
+        catalogMode = mode;
+        document.getElementById("modalTitle").textContent =
+          mode === "tiles" ? "Tile Catalog" : "Object Catalog";
+        document.getElementById("modalSearch").value = "";
+        renderCatalog("");
+        document.getElementById("modal").classList.add("open");
+      }
+      function renderCatalog(q) {
+        q = (q || "").toLowerCase();
+        const groups = catalogMode === "tiles" ? CAT.tiles : CAT.objects;
+        const selId =
+          catalogMode === "tiles"
+            ? state.brushTile && state.brushTile.id
+            : state.brushObj && state.brushObj.id;
+        let html = "";
+        for (const g of groups) {
+          const items = g.items.filter(
+            (it) =>
+              !q ||
+              it.name.toLowerCase().includes(q) ||
+              it.id.toLowerCase().includes(q),
+          );
+          if (!items.length) continue;
+          html += `<div class="mgroup"><h3>${g.group}</h3><div class="cards">`;
+          for (const it of items) {
+            html += `<div class="card${it.id === selId ? " sel" : ""}" data-id="${it.id}" title="${it.name} (${it.w}×${it.h})">
         <img loading="lazy" src="${url(it.variants[0])}">
-        ${it.variants.length>1?`<span class="badge">×${it.variants.length}</span>`:''}
+        ${it.variants.length > 1 ? `<span class="badge">×${it.variants.length}</span>` : ""}
         <span class="lbl">${it.name}</span></div>`;
-    }
-    html+=`</div></div>`;
-  }
-  const body=document.getElementById('modalBody'); body.innerHTML=html||'<p style="color:var(--muted)">Aucun résultat.</p>';
-  body.querySelectorAll('.card').forEach(el=>el.onclick=()=>pickFromCatalog(el.dataset.id));
-}
-function pickFromCatalog(id){
-  if(catalogMode==="tiles"){ state.brushTile=TILES_BY_ID.get(id); state.tileVar=0; }
-  else { state.brushObj=OBJ_BY_ID.get(id); }
-  document.getElementById('modal').classList.remove('open');
-  renderPanel();
-}
-document.getElementById('modalClose').onclick=()=>document.getElementById('modal').classList.remove('open');
-document.getElementById('modalSearch').oninput=e=>renderCatalog(e.target.value);
-document.getElementById('modal').addEventListener('mousedown',e=>{ if(e.target.id==='modal') document.getElementById('modal').classList.remove('open'); });
+          }
+          html += `</div></div>`;
+        }
+        const body = document.getElementById("modalBody");
+        body.innerHTML =
+          html || '<p style="color:var(--muted)">Aucun résultat.</p>';
+        body
+          .querySelectorAll(".card")
+          .forEach((el) => (el.onclick = () => pickFromCatalog(el.dataset.id)));
+      }
+      function pickFromCatalog(id) {
+        if (catalogMode === "tiles") {
+          state.brushTile = TILES_BY_ID.get(id);
+          const n = state.brushTile ? state.brushTile.variants.length : 1;
+          state.tileVar = n > 1 ? (Math.random() * n) | 0 : 0; // démarre le cycle au hasard
+        } else {
+          state.brushObj = OBJ_BY_ID.get(id);
+          state.objVar = 0;
+          state._pendingObjVar = null; // re-tirage pour le nouvel objet
+        }
+        document.getElementById("modal").classList.remove("open");
+        renderPanel();
+      }
+      document.getElementById("modalClose").onclick = () =>
+        document.getElementById("modal").classList.remove("open");
+      document.getElementById("modalSearch").oninput = (e) =>
+        renderCatalog(e.target.value);
+      document.getElementById("modal").addEventListener("mousedown", (e) => {
+        if (e.target.id === "modal")
+          document.getElementById("modal").classList.remove("open");
+      });
 
-/* =================== OUTILS / UI =================== */
-function setTool(t){
-  if(['roads','rivers','regions','texts'].includes(t)){ toast("« "+t+" » arrive bientôt"); return; }
-  state.tool=t; state.erase=false;
-  document.querySelectorAll('.tbtn[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool===t));
-  renderPanel();
-}
-document.querySelectorAll('.tbtn[data-tool]').forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
-document.getElementById('gridBtn').onclick=()=>{ state.showGrid=!state.showGrid; document.getElementById('gridBtn').classList.toggle('active',state.showGrid); render(); };
-function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',1500);}
-function refreshTilePreview(){ const im=document.getElementById('tilePrevImg'); if(im&&state.brushTile) im.src=url(state.brushTile.variants[state.tileVar%state.brushTile.variants.length]); }
+      /* =================== OUTILS / UI =================== */
+      function setTool(t) {
+        if (["roads", "rivers", "regions", "texts"].includes(t)) {
+          toast("« " + t + " » arrive bientôt");
+          return;
+        }
+        state.tool = t;
+        state.erase = false;
+        document
+          .querySelectorAll(".tbtn[data-tool]")
+          .forEach((b) => b.classList.toggle("active", b.dataset.tool === t));
+        renderPanel();
+      }
+      document
+        .querySelectorAll(".tbtn[data-tool]")
+        .forEach((b) => (b.onclick = () => setTool(b.dataset.tool)));
+      document.getElementById("gridBtn").onclick = () => {
+        state.showGrid = !state.showGrid;
+        document
+          .getElementById("gridBtn")
+          .classList.toggle("active", state.showGrid);
+        render();
+      };
 
-/* zoom molette */
-document.querySelector('.stage').addEventListener('wheel',e=>{ if(!e.ctrlKey && !e.metaKey && !e.shiftKey) return; e.preventDefault();
-  state.zoom = Math.max(0.12, Math.min(2, state.zoom*(e.deltaY<0?1.12:0.9))); render(); }, {passive:false});
+      /* repli/dépli du panneau contextuel */
+      (function () {
+        const panel = document.getElementById("panel"),
+          toggle = document.getElementById("panelToggle");
+        let collapsed = false;
+        const apply = () => {
+          panel.classList.toggle("collapsed", collapsed);
+          toggle.classList.toggle("flipped", collapsed);
+          toggle.title = collapsed
+            ? "Déplier le panneau"
+            : "Replier le panneau";
+        };
+        toggle.onclick = () => {
+          collapsed = !collapsed;
+          apply();
+        };
+      })();
 
-/* =================== PERSISTANCE =================== */
-function serialize(){
-  const cells=[];
-  for(const [k,c] of state.cells) cells.push([k,{t:c.terrain?[c.terrain.id,c.terrain.v]:null, o:c.objects.map(o=>[o.id,o.v])}]);
-  return {cols:state.cols,rows:state.rows,cells};
-}
-function deserialize(d){
-  state.cols=d.cols||14; state.rows=d.rows||11; state.cells=new Map();
-  for(const [k,c] of (d.cells||[])){
-    const terrain = c.t && TILES_BY_ID.has(c.t[0]) ? {id:c.t[0],v:c.t[1]||0} : null;
-    const objects = (c.o||[]).filter(o=>OBJ_BY_ID.has(o[0])).map(o=>({id:o[0],v:o[1]||0}));
-    state.cells.set(k,{terrain,objects});
-  }
-  render();
-}
-let saveTimer=null;
-function scheduleSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{try{localStorage.setItem('hexeditor2',JSON.stringify(serialize()));}catch(e){}},400); }
-function saveMap(){
-  const blob=new Blob([JSON.stringify(serialize())],{type:'application/json'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='hexmap.json'; a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href),1000); toast("Carte enregistrée ✓");
-}
-function loadMap(){
-  const inp=document.createElement('input'); inp.type='file'; inp.accept='.json';
-  inp.onchange=()=>{ const f=inp.files[0]; if(!f)return; const fr=new FileReader();
-    fr.onload=()=>{ try{deserialize(JSON.parse(fr.result));scheduleSave();toast("Chargée ✓");}catch(e){toast("Fichier invalide");} }; fr.readAsText(f); };
-  inp.click();
-}
-function exportPNG(){
-  const svgEl=document.getElementById('svg'); if(!svgEl)return;
-  const vb=svgEl.getAttribute('viewBox').split(' ').map(Number), w=vb[2], h=vb[3];
-  const clone=svgEl.cloneNode(true); clone.querySelectorAll('.hit,.gridline').forEach(n=>n.remove());
-  clone.setAttribute('width',w); clone.setAttribute('height',h); clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
-  const bg=document.createElementNS('http://www.w3.org/2000/svg','rect'); bg.setAttribute('width',w);bg.setAttribute('height',h);bg.setAttribute('fill','#10141a'); clone.insertBefore(bg,clone.firstChild);
-  const data=new XMLSerializer().serializeToString(clone), img=new Image();
-  img.onload=()=>{ const cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(img,0,0);
-    try{cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='hexmap.png';a.click();},'image/png');toast("PNG exporté ✓");}
-    catch(e){toast("Export bloqué en file:// (serveur local requis)");} };
-  img.onerror=()=>toast("Export PNG indisponible en file:// (tuiles externes)");
-  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(data);
-}
+      /* ===== menu réglages (popover) ===== */
+      (function () {
+        const menu = document.getElementById("settingsMenu"),
+          btn = document.getElementById("settingsBtn");
+        menu.innerHTML = `<div class="sm-title">Dimensions</div>
+    <div class="sm-dims">
+      <label>Largeur <input type="number" id="dimCols" min="1" max="200"></label>
+      <label>Hauteur <input type="number" id="dimRows" min="1" max="200"></label>
+    </div>
+    <hr>
+    <div class="sm-title">Carte</div>
+    <button class="ghost" id="saveBtn">${ic("download")} Enregistrer (.json)</button>
+    <button class="ghost" id="loadBtn">${ic("upload")} Charger</button>
+    <button class="ghost" id="pngBtn">${ic("image")} Export PNG</button>
+    <button class="ghost" id="pngFoundryBtn">${ic("image")} Export Foundry VTT</button>
+    <a href="index.html" style="text-decoration:none"><button class="ghost">${ic("back")} Générateur</button></a>`;
+        const dimCols = document.getElementById("dimCols"),
+          dimRows = document.getElementById("dimRows");
+        function applyDims() {
+          const c = Math.max(
+            1,
+            Math.min(200, parseInt(dimCols.value, 10) || state.cols),
+          );
+          const r = Math.max(
+            1,
+            Math.min(200, parseInt(dimRows.value, 10) || state.rows),
+          );
+          withHistory(() => {
+            state.cols = c;
+            state.rows = r;
+            dimCols.value = c;
+            dimRows.value = r; // les cases hors cadre sont conservées (resize non-destructif)
+            render();
+            scheduleSave();
+          });
+        }
+        dimCols.onchange = applyDims;
+        dimRows.onchange = applyDims;
+        document.getElementById("saveBtn").onclick = saveMap;
+        document.getElementById("loadBtn").onclick = loadMap;
+        document.getElementById("pngBtn").onclick = () => exportPNG(false);
+        document.getElementById("pngFoundryBtn").onclick = () =>
+          exportPNG(true);
+        const close = () => {
+          menu.classList.remove("open");
+          btn.classList.remove("active");
+        };
+        btn.onclick = () => {
+          const open = menu.classList.toggle("open");
+          btn.classList.toggle("active", open);
+          if (open) {
+            dimCols.value = state.cols;
+            dimRows.value = state.rows;
+          }
+        };
+        menu
+          .querySelectorAll("button")
+          .forEach((b) => b.addEventListener("click", close));
+        document.addEventListener("mousedown", (e) => {
+          if (
+            menu.classList.contains("open") &&
+            !menu.contains(e.target) &&
+            !btn.contains(e.target)
+          )
+            close();
+        });
+        window.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") close();
+        });
+      })();
+      function toast(m) {
+        const t = document.getElementById("toast");
+        t.textContent = m;
+        t.style.display = "block";
+        clearTimeout(t._h);
+        t._h = setTimeout(() => (t.style.display = "none"), 1500);
+      }
+      function refreshTilePreview() {
+        const im = document.getElementById("tilePrevImg");
+        if (im && state.brushTile)
+          im.src = url(
+            state.brushTile.variants[
+              state.tileVar % state.brushTile.variants.length
+            ],
+          );
+      }
 
-/* =================== INIT =================== */
-setTool('tiles');
-document.getElementById('gridBtn').classList.add('active');
-const saved=localStorage.getItem('hexeditor2');
-if(saved){ try{deserialize(JSON.parse(saved));}catch(e){render();} } else render();
-</script>
-</body>
+      /* =================== ZOOM & DÉPLACEMENT =================== */
+      const stage = document.querySelector(".stage");
+      const ZOOM_MIN = 0.15,
+        ZOOM_MAX = 1.1,
+        ZOOM_SENS = 0.0022; // sensibilité du zoom (plus petit = plus lent/doux)
+
+      /* zoom molette (Ctrl/Cmd/Shift + molette) - proportionnel, lissé et centré sur le curseur */
+      stage.addEventListener(
+        "wheel",
+        (e) => {
+          if (!e.ctrlKey && !e.metaKey && !e.shiftKey) return;
+          e.preventDefault();
+          const old = state.zoom;
+          // delta normalisé (lignes -> pixels) puis plafonné pour éviter les à-coups d'une grosse molette
+          let dy = e.deltaY * (e.deltaMode === 1 ? 16 : 1);
+          dy = Math.max(-60, Math.min(60, dy));
+          const factor = Math.exp(-dy * ZOOM_SENS); // zoom continu proportionnel à l'amplitude
+          const next = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, old * factor));
+          if (next === old) return;
+          const svg = document.getElementById("svg"),
+            vb = state._vb;
+          if (!svg || !vb) return;
+          const rect = stage.getBoundingClientRect();
+          const cx = e.clientX - rect.left,
+            cy = e.clientY - rect.top; // position du curseur dans la fenêtre
+          const fx = (stage.scrollLeft + cx) / old,
+            fy = (stage.scrollTop + cy) / old; // point sous le curseur (px SVG / zoom)
+          state.zoom = next;
+          // on redimensionne le SVG existant au lieu de tout reconstruire -> zoom fluide
+          svg.setAttribute("width", (vb.w * next) | 0);
+          svg.setAttribute("height", (vb.h * next) | 0);
+          stage.scrollLeft = fx * next - cx; // garde ce point sous le curseur
+          stage.scrollTop = fy * next - cy;
+        },
+        { passive: false },
+      );
+
+      /* déplacement : Espace + glisser (façon Photoshop) ou clic molette + glisser */
+      let spaceHeld = false,
+        panning2 = false,
+        panOrigin = null;
+      const isTyping = () => {
+        const a = document.activeElement;
+        return a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA");
+      };
+      window.addEventListener("keydown", (e) => {
+        if (e.code === "Space" && !isTyping()) {
+          if (!spaceHeld) {
+            spaceHeld = true;
+            stage.classList.add("pan-ready");
+            clearGhost();
+          }
+          e.preventDefault();
+        }
+      });
+      window.addEventListener("keyup", (e) => {
+        if (e.code === "Space") {
+          spaceHeld = false;
+          stage.classList.remove("pan-ready");
+        }
+      });
+      stage.addEventListener("mousedown", (e) => {
+        if (e.button !== 1 && !(spaceHeld && e.button === 0)) return; // clic molette OU Espace+clic gauche
+        e.preventDefault();
+        panning2 = true;
+        clearGhost();
+        panOrigin = {
+          x: e.clientX,
+          y: e.clientY,
+          sl: stage.scrollLeft,
+          st: stage.scrollTop,
+        };
+        stage.classList.add("panning");
+      });
+      stage.addEventListener("mouseleave", clearGhost);
+      /* aperçu d'objet (non plein) qui suit le curseur en mode tampon */
+      stage.addEventListener("mousemove", (e) => {
+        if (
+          state.tool !== "objects" ||
+          state.erase ||
+          painting ||
+          spaceHeld ||
+          panning2
+        )
+          return;
+        const it = state.brushObj;
+        if (!it || isFull(it)) return; // les objets pleins gardent l'aperçu cellulaire
+        const g = document.getElementById("ghost");
+        if (!g) return;
+        const p = eventToSvg(e);
+        if (!p) return;
+        const path = it.variants[nextObjVar(it)];
+        const x = (p.x - it.w / 2).toFixed(1),
+          y = (p.y - it.h).toFixed(1);
+        g.innerHTML = `<image href="${url(path)}" x="${x}" y="${y}" width="${it.w}" height="${it.h}"/>`;
+      });
+      window.addEventListener("mousemove", (e) => {
+        if (!panning2) return;
+        stage.scrollLeft = panOrigin.sl - (e.clientX - panOrigin.x);
+        stage.scrollTop = panOrigin.st - (e.clientY - panOrigin.y);
+      });
+      window.addEventListener("mouseup", () => {
+        if (panning2) {
+          panning2 = false;
+          stage.classList.remove("panning");
+        }
+      });
+
+      /* =================== PERSISTANCE =================== */
+      function serialize() {
+        const cells = [];
+        for (const [k, c] of state.cells)
+          cells.push([
+            k,
+            {
+              t: c.terrain ? [c.terrain.id, c.terrain.v] : null,
+              o: c.objects.map((o) =>
+                o.ox != null ? [o.id, o.v, o.ox, o.oy] : [o.id, o.v],
+              ),
+            },
+          ]);
+        return { cols: state.cols, rows: state.rows, cells };
+      }
+      function deserialize(d) {
+        state.cols = d.cols || 60;
+        state.rows = d.rows || 44;
+        state.cells = new Map();
+        for (const [k, c] of d.cells || []) {
+          const terrain =
+            c.t && TILES_BY_ID.has(c.t[0])
+              ? { id: c.t[0], v: c.t[1] || 0 }
+              : null;
+          const objects = (c.o || [])
+            .filter((o) => OBJ_BY_ID.has(o[0]))
+            .map((o) =>
+              o.length > 2
+                ? { id: o[0], v: o[1] || 0, ox: o[2], oy: o[3] }
+                : { id: o[0], v: o[1] || 0 },
+            );
+          state.cells.set(k, { terrain, objects });
+        }
+        render();
+      }
+      let saveTimer = null;
+      function scheduleSave() {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => {
+          try {
+            localStorage.setItem("hexeditor2", JSON.stringify(serialize()));
+          } catch (e) {}
+        }, 400);
+      }
+      function saveMap() {
+        const blob = new Blob([JSON.stringify(serialize())], {
+          type: "application/json",
+        });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "hexmap.json";
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        toast("Carte enregistrée ✓");
+      }
+      function loadMap() {
+        const inp = document.createElement("input");
+        inp.type = "file";
+        inp.accept = ".json";
+        inp.onchange = () => {
+          const f = inp.files[0];
+          if (!f) return;
+          const fr = new FileReader();
+          fr.onload = () => {
+            try {
+              const data = JSON.parse(fr.result);
+              withHistory(() => {
+                deserialize(data);
+                scheduleSave();
+              });
+              toast("Chargée ✓");
+            } catch (e) {
+              toast("Fichier invalide");
+            }
+          };
+          fr.readAsText(f);
+        };
+        inp.click();
+      }
+      function exportPNG(foundry) {
+        const EXPORT_MARGIN = 64; // marge autour du contenu (px)
+        // mode "Foundry VTT" : étire verticalement pour rendre les hexagones réguliers
+        // (compatibles avec une grille "Hex Rows", size = 256)
+        const SY = foundry ? 2 / Math.sqrt(3) : 1;
+        // liste de dessin, dans le même ordre que le rendu (terrain puis objets, par ligne/colonne)
+        // hex:true => tuile pleine (silhouette d'hexagone, donc bornes visibles plus serrées que le rectangle)
+        const draws = [];
+        let minCol = Infinity,
+          maxCol = -Infinity,
+          minRow = Infinity,
+          maxRow = -Infinity;
+        for (let row = 0; row < state.rows; row++)
+          for (let col = 0; col < state.cols; col++) {
+            const c = state.cells.get(key(col, row));
+            if (!c || (!c.terrain && !c.objects.length)) continue;
+            if (col < minCol) minCol = col;
+            if (col > maxCol) maxCol = col;
+            if (row < minRow) minRow = row;
+            if (row > maxRow) maxRow = row;
+            const t = tileXY(col, row);
+            if (c.terrain) {
+              const p = terrainPath(c.terrain);
+              if (p)
+                draws.push({
+                  src: p,
+                  x: t.x,
+                  y: t.y,
+                  w: TILE_W,
+                  h: TILE_H,
+                  hex: true,
+                });
+            }
+            for (const o of c.objects) {
+              const r = objItemVar(o);
+              if (!r) continue;
+              if (isFull(r.it))
+                draws.push({
+                  src: r.path,
+                  x: t.x,
+                  y: t.y,
+                  w: TILE_W,
+                  h: TILE_H,
+                  hex: true,
+                });
+              else {
+                const ox = o.ox != null ? o.ox : 128,
+                  oy = o.oy != null ? o.oy : ANCHOR_Y;
+                draws.push({
+                  src: r.path,
+                  x: t.x + ox - r.it.w / 2,
+                  y: t.y + oy - r.it.h,
+                  w: r.it.w,
+                  h: r.it.h,
+                });
+              }
+            }
+          }
+        if (!draws.length) {
+          toast("Carte vide");
+          return;
+        }
+        // boîte englobante du contenu visible (silhouette hex pour les tuiles : y ∈ [124, 383], x ∈ [0, 256])
+        let minX = Infinity,
+          minY = Infinity,
+          maxX = -Infinity,
+          maxY = -Infinity;
+        for (const d of draws) {
+          const x0 = d.hex ? d.x : d.x,
+            x1 = d.hex ? d.x + 256 : d.x + d.w,
+            y0 = d.hex ? d.y + 124 : d.y,
+            y1 = d.hex ? d.y + 383 : d.y + d.h;
+          if (x0 < minX) minX = x0;
+          if (y0 < minY) minY = y0;
+          if (x1 > maxX) maxX = x1;
+          if (y1 > maxY) maxY = y1;
+        }
+        let cropX, cropY, w, h;
+        if (foundry) {
+          // recadrage aligné sur la trame hexagonale -> colle à une grille Foundry "Hex Rows (Odd)",
+          // size 256, offset (0,0), sans avoir à bouger la grille
+          const PAD = 2; // marge en hexagones entiers (assez pour les objets qui dépassent en haut)
+          let c0 = minCol - PAD,
+            c1 = maxCol + PAD,
+            r0 = minRow - PAD,
+            r1 = maxRow + PAD;
+          if (r0 & 1) r0 -= 1; // ligne du haut non décalée => parité "Odd" garantie
+          cropX = c0 * COL; // bord gauche = bord gauche d'un hex de ligne paire
+          cropY = r0 * ROW + 124; // bord haut = sommet de l'hex (haut de sa boîte englobante)
+          w = c1 * COL + XOFF + TILE_W - cropX; // couvre le décalage des lignes impaires à droite
+          h = r1 * ROW + 383 - cropY;
+          // calage mesuré sur Foundry (la grille n'ancre pas son hex (0,0) pile en haut-gauche).
+          // X = 128px (demi-hex, parité) ; Y = 3px en pixels Foundry -> reconverti en espace tuile (÷ SY).
+          cropX += 128;
+          cropY += 3 / SY;
+        } else {
+          cropX = Math.floor(minX - EXPORT_MARGIN);
+          cropY = Math.floor(minY - EXPORT_MARGIN);
+          w = Math.ceil(maxX + EXPORT_MARGIN) - cropX;
+          h = Math.ceil(maxY + EXPORT_MARGIN) - cropY;
+        }
+        // précharge les images uniques (déjà en cache navigateur), puis dessine sur le canvas
+        const uniq = [...new Set(draws.map((d) => d.src))];
+        const imgs = {};
+        let loaded = 0,
+          failed = 0;
+        const finish = () => {
+          const cv = document.createElement("canvas");
+          cv.width = w;
+          cv.height = Math.round(h * SY);
+          const ctx = cv.getContext("2d");
+          ctx.fillStyle = "#10141a";
+          ctx.fillRect(0, 0, cv.width, cv.height);
+          if (SY !== 1) ctx.scale(1, SY); // étirement vertical (mode Foundry)
+          for (const d of draws) {
+            const im = imgs[d.src];
+            if (im && im.naturalWidth)
+              ctx.drawImage(im, d.x - cropX, d.y - cropY, d.w, d.h);
+          }
+          try {
+            cv.toBlob((b) => {
+              const a = document.createElement("a");
+              a.href = URL.createObjectURL(b);
+              a.download = foundry ? "hexmap-foundry.png" : "hexmap.png";
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+            }, "image/png");
+            const note = foundry ? " — grille Hex Rows, size 256" : "";
+            toast(
+              failed
+                ? `PNG exporté (${failed} image(s) non chargée(s))`
+                : "PNG exporté ✓" + note,
+            );
+          } catch (e) {
+            // canvas "tainted" : arrive surtout en file:// — un serveur local règle ça
+            toast("Export bloqué : lance l'éditeur via un serveur local");
+          }
+        };
+        uniq.forEach((src) => {
+          const im = new Image();
+          im.onload = im.onerror = () => {
+            if (!im.naturalWidth) failed++;
+            if (++loaded === uniq.length) finish();
+          };
+          im.src = url(src);
+          imgs[src] = im;
+        });
+      }
+
+      /* =================== INIT =================== */
+      setTool("tiles");
+      document.getElementById("gridBtn").classList.add("active");
+      const saved = localStorage.getItem("hexeditor2");
+      if (saved) {
+        try {
+          deserialize(JSON.parse(saved));
+        } catch (e) {
+          render();
+        }
+      } else render();
+
+      /* centre la vue sur un hexagone (centre du hex au centre du viewport) */
+      function centerOnHex(col, row) {
+        if (!state._vb) return;
+        const t = tileXY(col, row);
+        const px = (t.x + 128 - state._vb.x) * state.zoom; // centre horizontal du hex
+        const py = (t.y + 254 - state._vb.y) * state.zoom; // centre vertical du hex (≈ (124+383)/2)
+        stage.scrollLeft = px - stage.clientWidth / 2;
+        stage.scrollTop = py - stage.clientHeight / 2;
+      }
+      const centerMap = () =>
+        centerOnHex(Math.floor(state.cols / 2), Math.floor(state.rows / 2));
+
+      /* raccourci C : centrer sur l'hex du milieu de la carte */
+      window.addEventListener("keydown", (e) => {
+        if (isTyping() || e.ctrlKey || e.metaKey || e.altKey) return;
+        if (e.key === "c" || e.key === "C") centerMap();
+      });
+
+      /* Ctrl/Cmd+Z = annuler · Ctrl/Cmd+Shift+Z ou Ctrl/Cmd+Y = rétablir */
+      window.addEventListener("keydown", (e) => {
+        if (!(e.ctrlKey || e.metaKey) || isTyping()) return;
+        const k = e.key.toLowerCase();
+        if (k === "z") {
+          e.preventDefault();
+          e.shiftKey ? redo() : undo();
+        } else if (k === "y") {
+          e.preventDefault();
+          redo();
+        }
+      });
+
+      /* au chargement : on arrive centré sur le milieu de la carte */
+      centerMap();
+    </script>
+  </body>
 </html>
