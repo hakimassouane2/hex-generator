@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hex Generator — Sandbox Generator MVP</title>
+<style>
+  :root{
+    --bg:#1d1f23; --panel:#2a2d33; --panel2:#33373e; --ink:#e8e6df;
+    --muted:#9aa0a8; --accent:#c9a24b; --border:#41454d;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:system-ui,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+  .app{display:flex;height:100vh;overflow:hidden}
+  /* ---- Barre latérale gauche : contrôles ---- */
+  .controls{width:300px;flex:0 0 300px;background:var(--panel);border-right:1px solid var(--border);padding:16px;overflow-y:auto}
+  .controls h1{font-size:17px;margin:0 0 2px;color:var(--accent)}
+  .controls .sub{font-size:11px;color:var(--muted);margin-bottom:16px}
+  fieldset{border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:0 0 14px}
+  legend{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:0 4px}
+  label.row{display:flex;align-items:center;gap:8px;font-size:13px;margin:7px 0;cursor:pointer}
+  label.row input[type=radio]{accent-color:var(--accent)}
+  .field{margin:8px 0}
+  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:3px}
+  select,input[type=number],input[type=text]{width:100%;background:var(--panel2);color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:13px}
+  .two{display:flex;gap:8px}
+  .two .field{flex:1}
+  button{width:100%;background:var(--accent);color:#1d1f23;border:0;border-radius:7px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;margin-top:4px}
+  button:hover{filter:brightness(1.07)}
+  button.ghost{background:transparent;color:var(--ink);border:1px solid var(--border);font-weight:500;margin-top:8px}
+  .hint{font-size:11px;color:var(--muted);line-height:1.45;margin-top:6px}
+  /* ---- Zone carte ---- */
+  .map{flex:1;position:relative;overflow:hidden;background:radial-gradient(circle at 50% 40%,#262a30,#15171a)}
+  #svgWrap{width:100%;height:100%}
+  svg{width:100%;height:100%;display:block}
+  .hit{cursor:pointer;fill:transparent;stroke:transparent;stroke-width:4;pointer-events:all}
+  .hit:hover{stroke:#ffffffaa}
+  .hit.sel{stroke:#fff;stroke-width:6}
+  .hexnum{font-size:30px;fill:#fff;paint-order:stroke;stroke:#000a;stroke-width:5px;pointer-events:none;text-anchor:middle;font-weight:800}
+  .poi{pointer-events:none;text-anchor:middle;dominant-baseline:central}
+  /* ---- Panneau détail droite ---- */
+  .detail{width:320px;flex:0 0 320px;background:var(--panel);border-left:1px solid var(--border);padding:16px;overflow-y:auto}
+  .detail h2{font-size:15px;margin:0 0 4px}
+  .detail .biome-tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;color:#1d1f23;font-weight:700;margin-bottom:10px}
+  .kv{margin:0 0 12px}
+  .kv .k{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .kv .v{font-size:14px;line-height:1.4}
+  .card{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:0 0 12px}
+  .card .title{font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+  .empty{color:var(--muted);font-size:13px;text-align:center;margin-top:60px;line-height:1.5}
+  .badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:4px;background:#00000033;margin-left:6px}
+  .legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .legend .li{display:flex;align-items:center;gap:5px;font-size:11px}
+  .legend .sw{width:12px;height:12px;border-radius:3px;border:1px solid #0006}
+  .toast{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:#000a;padding:6px 14px;border-radius:20px;font-size:12px;color:#fff}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ====== CONTRÔLES ====== -->
+  <aside class="controls">
+    <h1>Hex Generator</h1>
+    <div class="sub">Sandbox Generator (Atelier Clandestin) — MVP v1</div>
+    <div style="margin-bottom:14px"><a href="editor.html" style="color:var(--accent);font-size:13px;text-decoration:none">🖌️ Mode Éditeur (construction manuelle) →</a></div>
+
+    <fieldset>
+      <legend>Méthode de carte</legend>
+      <label class="row"><input type="radio" name="mode" value="book" checked> Procédure du livre (flocon)</label>
+      <label class="row"><input type="radio" name="mode" value="grid"> Grille rectangulaire</label>
+
+      <div id="bookOpts" class="field">
+        <label>Nombre de couches autour du centre</label>
+        <select id="layers">
+          <option value="1">1 couche — 7 hexagones</option>
+          <option value="2" selected>2 couches — 19 hexagones (recommandé)</option>
+          <option value="3">3 couches — 37 hexagones</option>
+          <option value="4">4 couches — 61 hexagones</option>
+        </select>
+      </div>
+
+      <div id="gridOpts" class="two" style="display:none">
+        <div class="field"><label>Colonnes</label><input type="number" id="cols" value="8" min="2" max="24"></div>
+        <div class="field"><label>Lignes</label><input type="number" id="rows" value="6" min="2" max="24"></div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Génération</legend>
+      <div class="field">
+        <label>Climat (extension Biomes)</label>
+        <select id="climate">
+          <option value="temperate" selected>Tempéré</option>
+          <option value="cold">Froid</option>
+          <option value="hot">Chaud</option>
+        </select>
+      </div>
+      <label class="row"><input type="checkbox" id="trad" checked> Campagne traditionnelle (1er hex = Village, 2e = Donjon)</label>
+      <label class="row"><input type="checkbox" id="deep" checked> Biomes profonds (amas de 7 hex identiques)</label>
+      <label class="row"><input type="checkbox" id="tiles" checked> Tuiles graphiques (sinon couleurs + emoji)</label>
+      <label class="row"><input type="checkbox" id="showpoi" checked> Afficher les points d'intérêt</label>
+      <label class="row"><input type="checkbox" id="shownum" checked> Afficher les numéros</label>
+      <div class="field" style="margin-top:10px">
+        <label>Graine (laisser vide = aléatoire)</label>
+        <div style="display:flex;gap:6px">
+          <input type="text" id="seed" placeholder="ex : 12345" style="flex:1">
+          <button id="reroll" class="ghost" title="Nouvelle graine aléatoire + régénération" style="margin-top:0;width:auto;padding:6px 12px;font-size:16px">🎲</button>
+        </div>
+      </div>
+    </fieldset>
+
+    <button id="gen">⚄ Générer la carte</button>
+    <button id="copyseed" class="ghost">Copier le lien de cette carte</button>
+    <div class="two" style="margin-top:8px">
+      <button id="exportpng" class="ghost" style="margin-top:0">⤓ Export PNG</button>
+      <button id="exportmd" class="ghost" style="margin-top:0">⤓ Feuille MJ</button>
+    </div>
+
+    <fieldset style="margin-top:16px">
+      <legend>Légende biomes</legend>
+      <div class="legend" id="legend"></div>
+    </fieldset>
+    <div class="hint">Clique sur un hexagone pour voir tous les jets de dés détaillés. Le rendu est en SVG flat-top.</div>
+  </aside>
+
+  <!-- ====== CARTE ====== -->
+  <main class="map">
+    <div id="svgWrap"></div>
+    <div class="toast" id="toast" style="display:none"></div>
+  </main>
+
+  <!-- ====== DÉTAIL ====== -->
+  <aside class="detail" id="detail">
+    <div class="empty">Génère une carte puis<br>clique sur un hexagone<br>pour en voir le détail.</div>
+  </aside>
+</div>
+
+<script>
+"use strict";
+/* =========================================================================
+   DONNÉES — fidèles au cerveau (dossier /regles). Voir 01..06.
+   ========================================================================= */
+
+// 5 biomes par climat, dans l'ordre canonique des tables d10 :
+// index 0 = Prairie/Lande/Savane, 1 = Forêt, 2 = Collines/Toundra/Désert,
+// 3 = Marais, 4 = Montagnes.
+const BIOMES = {
+  temperate: [
+    {name:"Prairie",   color:"#bcd97e", emoji:"🌾"},
+    {name:"Forêt",     color:"#4f8f4a", emoji:"🌲"},
+    {name:"Collines",  color:"#c7ad6e", emoji:"⛰️"},
+    {name:"Marais",    color:"#7a8c52", emoji:"🦟"},
+    {name:"Montagnes", color:"#9a9a9a", emoji:"🏔️"},
+  ],
+  cold: [
+    {name:"Lande",              color:"#9fae8c", emoji:"🍂"},
+    {name:"Forêt de conifères", color:"#3d6b54", emoji:"🌲"},
+    {name:"Toundra",            color:"#c9cbb8", emoji:"🌿"},
+    {name:"Champs de neige",    color:"#e6ecf2", emoji:"❄️"},
+    {name:"Pics gelés",         color:"#b7c4d1", emoji:"🏔️"},
+  ],
+  hot: [
+    {name:"Savane",          color:"#d9c46e", emoji:"🌾"},
+    {name:"Forêt tropicale", color:"#3f7a3a", emoji:"🌴"},
+    {name:"Désert",          color:"#e2c98c", emoji:"🏜️"},
+    {name:"Marécage",        color:"#6e8a5a", emoji:"🐊"},
+    {name:"Plateau",         color:"#c2a06a", emoji:"🪨"},
+  ],
+};
+
+// Rencontres par biome (index de jet 2..12). Voir 04-rencontres.md.
+const ENCOUNTERS = {
+  temperate: {
+    "Prairie":["Dinosaures","Ogres","Gnolls","Orcs","Gobelins","Rats géants","Loups","Bandits","Berserkers","Worgs","Loups-garous"],
+    "Forêt":["Ents","Araignées géantes","Ogres","Ours","Gobelins","Sangliers","Loups","Bandits","Elfes","Dryades","Loups-garous"],
+    "Collines":["Manticores","Basilics","Ogres","Orcs","Gobelins","Rats géants","Loups","Bandits","Hommes-bêtes","Géants","Vouivres"],
+    "Marais":["Hommes-mites","Hommes-champignons","Hommes-grenouilles","Trolls","Squelettes","Crocodiles","Zombies","Orcs","Hommes-lézards","Hommes-serpents","Hydres"],
+    "Montagnes":["Géants","Griffons","Nains","Kobolds","Orcs","Ours","Loups","Bandits","Berserkers","Smilodons","Vampires"],
+  },
+  cold: {
+    "Lande":["Bêtes déphasantes","Feux follets","Orcs","Gobelins","Bandits","Cerfs","Loups","Squelettes","Zombies","Fantômes","Loups-garous"],
+    "Forêt de conifères":["Ours à bec","Araignées géantes","Ogres","Ours","Gnomes","Cerfs","Loups","Bandits","Orcs","Castors géants","Loups-garous"],
+    "Toundra":["Wendigos","Banshees","Draugar","Bisons","Loups","Caribous","Smilodons","Berserkers","Néandertaliens","Mammouths","Géants"],
+    "Champs de neige":["Remorhaz","Vers du givre","Yétis","Trolls des glaces","Ours polaires","Loups","Mammouths","Feux follets","Méphites de glace","Spectres","Géants du givre"],
+    "Pics gelés":["Rocs","Géants de pierre","Yétis","Trolls des glaces","Ours","Chèvres","Smilodons","Draugar","Nains","Spectres","Géants du givre"],
+  },
+  hot: {
+    "Savane":["Ankhegs","Scarabées géants","Gnolls","Hyènes","Nomades","Antilopes","Lions","Fourmis géantes","Chauves-souris géantes","Rhinocéros","Éléphants"],
+    "Forêt tropicale":["Lamies","Singes blancs","Hommes-lézards","Araignées géantes","Jaguars","Babouins","Serpents","Hommes-serpent","Rakshasas","Were-jaguars","Couatls"],
+    "Désert":["Sphinx","Hommes-sable","Scorpions géants","Hommes-chat","Momies","Essaims de scarabées","Nomades","Fourmilions géants","Manscorpions","Djinns/Efreets","Vers des sables"],
+    "Marécage":["Serpents géants","Hommes-tortue","Crapauds géants","Hommes-crapaud","Stirges","Crocodiles","Tortues happeuses géantes","Piranhas","Tertres errants","Sangsues géantes","Hydres"],
+    "Plateau":["Dracolisks","Cyclopes","Manticores","Nains","Bandits","Lamas","Cougars","Ours","Condors","Hommes-oiseau","Rocs"],
+  },
+};
+
+// Biomes profonds : nom du biome normal -> {name, emoji, color, enc[1d6]}
+const DEEP = {
+  "Prairie":{name:"Champ de trèfle",color:"#9bd36a",emoji:"🍀",enc:["Leprechauns","Leprechauns","Leprechauns","Limaces géantes","Limaces géantes","Licornes"]},
+  "Forêt":{name:"Forêt hantée",color:"#2f5a37",emoji:"👻",enc:["Loups-garous","Loups-garous","Loups-garous","Fantômes","Fantômes","Arbres tueurs"]},
+  "Collines":{name:"Vallée inondée",color:"#7fa6a0",emoji:"🌊",enc:["Anguilles","Anguilles","Anguilles","Hommes-poissons","Hommes-poissons","Castors géants"]},
+  "Marais":{name:"Forêt fongique",color:"#8a6f9c",emoji:"🍄",enc:["Hurleurs","Hurleurs","Hurleurs","Hommes-champignons","Hommes-champignons","Fongoïdes"]},
+  "Montagnes":{name:"Volcan",color:"#7a3b34",emoji:"🌋",enc:["Salamandres de feu","Salamandres de feu","Salamandres de feu","Efreets","Efreets","Phénix"]},
+  "Lande":{name:"Marais tourbeux",color:"#8a9170",emoji:"🪵",enc:["Momies des tourbières","Momies des tourbières","Momies des tourbières","Mégères vertes","Mégères vertes","Fantômes"]},
+  "Forêt de conifères":{name:"Forêt maudite",color:"#2c4a3a",emoji:"💀",enc:["Squelettes","Squelettes","Squelettes","Cauchemars","Cauchemars","Spectres"]},
+  "Toundra":{name:"Sources chaudes",color:"#b6cfc4",emoji:"♨️",enc:["Ours","Ours","Ours","Méphites de vapeur","Méphites de vapeur","Néréides"]},
+  "Champs de neige":{name:"Glacier",color:"#cfe3f2",emoji:"🧊",enc:["Yétis","Yétis","Yétis","Géants du givre","Géants du givre","Remorhaz"]},
+  "Pics gelés":{name:"Sols cristallins",color:"#a9c2d6",emoji:"💎",enc:["Salamandres de givre","Salamandres de givre","Salamandres de givre","Élémentaires de pierre","Élémentaires de pierre","Crysmals"]},
+  "Savane":{name:"Champ d'épines",color:"#c2b25a",emoji:"🌵",enc:["Lianes constrictrices","Lianes constrictrices","Lianes constrictrices","Plantes-pièges","Plantes-pièges","Vegepygmées"]},
+  "Forêt tropicale":{name:"Jungle primale",color:"#2f5e2c",emoji:"🦖",enc:["Singes carnivores","Singes carnivores","Singes carnivores","Serpents géants","Serpents géants","Hydres"]},
+  "Désert":{name:"Oasis",color:"#c9d98c",emoji:"🌴",enc:["Hippopotames","Hippopotames","Hippopotames","Nomades","Nomades","Manticores"]},
+  "Marécage":{name:"Marécage toxique",color:"#5e7a3a",emoji:"☠️",enc:["Cobras cracheurs","Cobras cracheurs","Cobras cracheurs","Libellules géantes","Libellules géantes","Basilics"]},
+  "Plateau":{name:"Vallée perdue",color:"#a88a5a",emoji:"🦕",enc:["Néandertaliens","Néandertaliens","Néandertaliens","Dinosaures","Dinosaures","Mastodontes"]},
+};
+
+// Points d'intérêt
+const POI = {
+  landmark:{name:"Point de repère", emoji:"📍"},
+  hamlet:  {name:"Hameau",          emoji:"🛖"},
+  village: {name:"Village",         emoji:"🏘️"},
+  city:    {name:"Ville",           emoji:"🏙️"},
+  castle:  {name:"Château",         emoji:"🏰"},
+  tower:   {name:"Tour",            emoji:"🗼"},
+  abbey:   {name:"Abbaye",          emoji:"⛪"},
+  lair:    {name:"Repaire",         emoji:"🐲"},
+  dungeon: {name:"Donjon",          emoji:"💀"},
+};
+const SETTLEMENTS = ["hamlet","village","city","castle","tower","abbey"]; // d6 1..6
+
+// Manifeste des tuiles (miroir de tiles.json). Terrain = pack Basic ; lieux = pack Locations.
+const TILES = {
+  terrainDir:"assets/tiles/Hex Basic Set Painted 2D Terrain v1.3.0 extracted/",
+  decorDir:"assets/tiles/Hex Medieval-Fantasy Locations v1.3.4 - done/Assets/Hex Medieval Fantasy Locations/Decor/",
+  biomes:{
+    "Prairie":["hexPlains00","hexPlains01","hexPlains02","hexPlains03"],
+    "Forêt":["hexForestBroadleaf00","hexForestBroadleaf01","hexForestBroadleaf02","hexForestBroadleaf03","hexWoodlands00","hexWoodlands01","hexWoodlands02","hexWoodlands03"],
+    "Collines":["hexHills00","hexHills01","hexHills02","hexHills03"],
+    "Marais":["hexMarsh00","hexMarsh01","hexMarsh02","hexMarsh03"],
+    "Montagnes":["hexMountain00","hexMountain01","hexMountain02","hexMountain03"],
+    "Lande":["hexHighlands00","hexHighlands01","hexHighlands02","hexHighlands03"],
+    "Forêt de conifères":["hexForestPineSnowCovered00","hexWoodlands00","hexWoodlands01","hexWoodlands02","hexWoodlands03"],
+    "Toundra":["hexScrublands00","hexScrublands01","hexScrublands02","hexScrublands03"],
+    "Champs de neige":["hexSnowField00"],
+    "Pics gelés":["hexMountainSnow00","hexMountain00","hexMountain01","hexMountain02","hexMountain03"],
+    "Savane":["hexScrublands00","hexScrublands01","hexScrublands02","hexScrublands03"],
+    "Forêt tropicale":["hexJungle00"],
+    "Désert":["hexDesertDunes00","hexDesertDunes01","hexDesertDunes02","hexDesertDunes03","hexSandPalms00","hexDesertYellowHills00"],
+    "Marécage":["hexSwamp00","hexWetlands00","hexMarsh00","hexMarsh01","hexMarsh02","hexMarsh03"],
+    "Plateau":["hexDesertYellowMesaLarge00","hexDesertRedMountains00","hexMountain00","hexMountain01"],
+  },
+  deep:{
+    "Volcan":["hexVolcanoActive00","hexLavaField00","hexAshPlains00"],
+    "Oasis":["hexDesertDunesOasis00"],
+  },
+  poi:{
+    hamlet: {full:true,  files:["villageSmall00","villageSmall01","villageSmall02","villageSmall03"]},
+    village:{full:true,  files:["village00","village01","village02","village03","villageThatched00","villageWood00"]},
+    city:   {full:true,  files:["walledCity","walledCityMossy"]},
+    castle: {full:true,  files:["castle","castle2","castle3","castleFortified"]},
+    tower:  {full:false, w:162, h:286, files:["wizardTower00","wizardTowerDark00","wizardTowerRuins00"]},
+    abbey:  {full:true,  files:["church00","temple"]},
+    lair:   {full:false, w:233, h:176, files:["undergroundPassageOpen00","banditCamp00"]},
+    dungeon:{full:true,  files:["templeRuins","castleRuinDirt","castleRuinForest"]},
+    landmark:{full:false,w:70,  h:85,  files:["sign00"]},
+  }
+};
+function tileURL(kind,name){return encodeURI((kind==='t'?TILES.terrainDir:TILES.decorDir)+name+".png");}
+
+// Points de repère — type 1d6 (1-3 naturel,4-5 artificiel,6 magique), catégorie 1d6 -> nature 1d10
+const LANDMARKS = {
+  naturel:{
+    label:"Naturel",
+    cats:[
+      ["Faune",["Barrage de castors","Cimetière d'animaux","Coquille d'escargot géant","Fourmilière","Galeries immenses","Lieu couvert de corbeaux","Nid d'un oiseau géant","Squelette d'un animal géant","Zone de chasse d'un prédateur","Zone saccagée"]],
+      ["Flore (A)",["Arbre centenaire","Arbre déraciné","Arbre exotique","Arbre fruitier","Arbre mort","Cercle de fleurs","Champignon géant","Fleur géante","Zone brûlée","Zone envahie par les ronces"]],
+      ["Flore (B)",["Alignement d'arbres","Arbre creux","Bosquet impénétrable","Buisson à baies","Cercle de champignons","Coin à champignons","Plante rare","Plante remplie d'eau","Prolifération mycélienne","Racine formant une arche"]],
+      ["Géologie (A)",["Arche rocheuse","Bassin de lave","Bourbier","Cratère","Cristal géant","Gouffre","Grotte","Pont de pierre","Prolifération cristalline","Rocher en forme d'animal"]],
+      ["Géologie (B)",["Doline","Éboulis","Épine rocheuse","Escalier de pierre","Faille","Fosse","Ravine","Roche monumentale","Trou dans la roche","Veine de métal précieux"]],
+      ["Hydrologie",["Cascade","Étang","Grotte sous eau","Gué","Lac","Rapides","Rivière","Ruisseau","Source","Source chaude"]],
+    ]
+  },
+  artificiel:{
+    label:"Artificiel",
+    cats:[
+      ["Culte",["Calvaire","Caveau","Cimetière","Cloche/Gong","Croix","Idole","Lieu béni","Sanctuaire","Tombe","Tumulus"]],
+      ["Labeur",["Arbres abattus","Brûlis","Camp de travail","Carrière","Champ","Château d'eau","Épouvantail","Étable","Grenier à grain","Prairie"]],
+      ["Mystère",["Dolmen","Empilement de rochers","Masques","Os suspendus","Pierres dressées","Pile d'ossements","Poupées de paille","Rocher gravé","Têtes sur des piques","Totem"]],
+      ["Petite structure",["Aire de bivouac","Banc","Barrière en bois","Belvédère","Cabane de chasseur","Mirador","Niche","Palissade","Puits","Remise"]],
+      ["Ruine",["Château en ruines","Église saccagée","Entrée de mine effondrée","Étable brûlée","Maison détruite","Manoir décrépi","Tas de décombres","Taverne abandonnée","Tour envahie par la végétation","Village rasé"]],
+      ["Voyage",["Borne frontière","Caillebotis","Escaliers","Panneau d'affichage","Panneau de danger","Passage escarpé","Pont","Pont cassé","Pont suspendu","Tyrolienne"]],
+    ]
+  },
+  magique:{
+    label:"Magique",
+    cats:[
+      ["Chemin magique",["Chemin illusoire","Eau permettant de marcher","Eau permettant de respirer","Escalier en lévitation","Miroir magique","Pont à devinettes","Pont arc-en-ciel","Pont invisible","Champignons fluos","Trou de ver"]],
+      ["Lieu de pouvoir",["Balise magique","Eaux sacrées","Convergence solaire","Puits de mana","Racine de l'Arbre Monde","Roche néolithique","Sépultures anciennes","Tombe d'un saint","Ziggourat d'antan","Zone préservée"]],
+      ["Objet enchanté",["Arbre aux fruits magiques","Bassin curatif","Bassin divinatoire","Chaudron de sorcière","Cloche enchantée","Épée dans un rocher","Fosse de mutation","Pierre de connaissance","Pierre de fertilité","Fontaine magique"]],
+      ["Phénomène étrange",["Arbre brûlant perpétuel","Bâtiment hanté","Cascade inversée","Cristal chantant","Cristal flottant","Glace fondant perpétuel","Gravures lumineuses","Magnétisme puissant","Murmures dans le vent","Rocher parlant"]],
+      ["Résidus magiques",["Autel ensanglanté","Aventuriers pétrifiés","Champ de bataille magique","Corps couvert de cristaux","Golem détruit","Restes d'une cérémonie","Sanctuaire ancien","Signes d'explosion","Zone corrompue","Poussière de fée"]],
+      ["Zone envoûtée",["Champ de force","Cyclone incessant","Dôme de ténèbres","Lieu où rien ne pousse","Protection contre le Mal","Temps arrêté","Zone anti-magie","Zone de malchance","Zone enneigée","Zone ramenant les morts"]],
+    ]
+  },
+};
+
+// Contenu d'un point de repère (1d6) + sous-tables
+const CONTENT_DANGER = ["Ancienne maladie en sommeil","Animaux venimeux","Brouillard","Corruption magique","Fantômes","Fosses cachées","Fosses d'acide","Instable/Prêt à casser","Malédiction","Orientation difficile","Peste","Pièges de chasse","Plantes allergènes","Radiations","Sables mouvants","Sabotage/Piège","Spores hallucinogènes","Terrain dangereux","Vapeurs toxiques","Zone volcanique"];
+const CONTENT_VIDE = ["Infos sur les monstres proches","Infos sur les monstres proches","Infos sur les monstres proches","Infos sur les monstres proches","Infos sur les monstres proches","Coutume locale","Effets curatifs","Emplacement d'un donjon","Emplacement d'un passage secret","Événement à venir","Événement passé important","Histoire d'une arme magique","Itinéraire vers un peuplement","Légende/Mythe","Météo à venir","Mot de passe","Mots d'une langue de monstre","Recette alchimique","Sort/Rituel","Toxicité d'un ingrédient"];
+const CONTENT_SPECIAL = ["Arbitrer une dispute","Prévenir une menace","Résoudre une énigme","Percer un mystère","Percer un mystère","Percer un mystère","PNJ/Monstre en difficulté","PNJ/Monstre en difficulté","PNJ/Monstre en difficulté","Lié au point de repère","Lié au point de repère","Lié au point de repère"];
+
+// Générateur de noms simplifié (voir 06-noms.md)
+const NAME_A = ["Abbaye","Arche","Auberge","Cave","Chapelle","Cloître","Clos","Cour","Croix","Ferme","Forge","Foyer","Grange","Halle","Maison","Marché","Moulin","Pavillon","Pont","Porte","Puits","Relais","Stèle","Tour","Villa"];
+const NAME_B = ["Aigle","Ange","Arc","Aube","Baie","Bar","Barde","Baron","Bélier","Bouleau","Brume","Cerf","Chêne","Cheval","Chèvre","Ciel","Cœur","Coq","Corbeau","Corne","Croc","Dragon","Elfe","Épée","Épice","Épine","Espoir","Étoile","Faucon","Feu","Feuille","Fleur","Garde","Hiver","Jour","Lapin","Lièvre","Lion","Loup","Lune","Mage","Mousse","Nain","Nid","Nuage","Nuit","Oiseau","Paille","Pin","Plume","Poisson","Porc","Rat","Renard","Rêve","Roche","Rose","Sable","Saule","Sel","Soleil","Tombe","Vache","Vent","Vouivre"];
+const NAME_E = ["Sombre","Vif","Brave","Haute","Noire","Dorée","Grise","Vieille","Belle","Forte"];
+const FACTION_NAMES = ["Asturia","Baccavar","Chehebomond","Daekiver","Draetun","Egumnon","Eradiu","Fassithia","Hepett","Jildis","Krogem","Lihisos","Nuvgar","Ommadell","Phunnilan","Rabolar","Ruclalyn","Saedrenia","Westocrys","Ystopomos"];
+const NOBLE_TITLES = [ // index par seuils 1d20 -> {m,f,domain}
+  {max:5, m:"Chevalier", f:"Dame", domain:"Fief"},
+  {max:9, m:"Baron", f:"Baronne", domain:"Baronnie"},
+  {max:12, m:"Vicomte", f:"Vicomtesse", domain:"Vicomté"},
+  {max:15, m:"Comte", f:"Comtesse", domain:"Comté"},
+  {max:17, m:"Marquis", f:"Marquise", domain:"Marche"},
+  {max:19, m:"Duc", f:"Duchesse", domain:"Duché"},
+  {max:20, m:"Prince", f:"Princesse", domain:"Principauté"},
+];
+const NOBLE_FIRST = ["Adrian","Agatha","Alaric","Alexandra","Alice","Arthur","Astrid","Beatrice","Cedric","Charles","Charlotte","Clement","Constance","Edmund","Eleanor","Elizabeth","Ferdinand","Frederick","George","Gideon","Henry","Isabella","James","John","Louis","Margaret","Mary","Nicholas","Oswald","Philip","Richard","Roland","Rupert","Sigismund","Sophie","Stephen","Thibault","Tristan","Victor","William"];
+const NOBLE_LAST = ["Beau","Black","Brave","Dragon","Dusk","Ever","Frost","Golden","Iron","Light","Lion","Nord","Raven","Sacred","Sea","Somer","Thorne","Vale"];
+const NOBLE_LAST2 = ["bride","child","cloak","crest","fall","forge","hall","heart","mind","rider","rock","scar","shade","soul","storm","vale","wood"];
+const FACTION_REL = ["Guerre ouverte","Hostilité","Hostilité","Hostilité","Indifférence","Indifférence","Indifférence","Paix/Commerce","Paix/Commerce","Paix/Commerce","Alliance"]; // index 2..12
+
+/* =========================================================================
+   PRNG seedé (mulberry32) + helpers de dés
+   ========================================================================= */
+let RNG = Math.random;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function hashSeed(str){let h=2166136261;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+const die = n => Math.floor(RNG()*n)+1;            // 1..n
+const pick = arr => arr[Math.floor(RNG()*arr.length)];
+const d6=()=>die(6), d10=()=>die(10), d20=()=>die(20), d100=()=>die(100);
+function d2d6(){return die(6)+die(6);}             // 2..12
+
+/* =========================================================================
+   GÉOMÉTRIE HEX (flat-top)
+   ========================================================================= */
+// Pavage pointy-top calé sur les tuiles 256x384 (paramètres validés empiriquement).
+const TILE_W=256, TILE_H=384;       // dimensions des PNG
+const COL=256, ROW=192, XOFF=128;   // pas du pavage
+const ANCHOR_Y=300;                 // base au sol pour sprites non plein-canevas
+// Silhouette RÉELLE de la tuile (coords locales p/r au coin haut-gauche tx,ty) :
+// pointe haute, côtés verticaux (épaisseur 3D), pointe basse. Mesurée sur le canal alpha.
+const HEX_LOCAL=[[128,124],[256,191],[256,321],[128,383],[0,321],[0,191]];
+const FACE_CX=128, FACE_CY=250;     // centre visuel de la face (emoji)
+const CUBE_DIRS=[[1,-1,0],[1,0,-1],[0,1,-1],[-1,1,0],[-1,0,1],[0,-1,1]];
+const key=(q,r)=>q+","+r;
+// axial (q,r) -> offset col/row (pointy-top, "odd-r")
+function axialToOffset(q,r){return {col:q+((r-(r&1))>>1), row:r};}
+function tileXY(col,row){return {x:col*COL+((row&1)?XOFF:0), y:row*ROW};}
+function hexPolyTile(tx,ty){return HEX_LOCAL.map(v=>(tx+v[0])+","+(ty+v[1])).join(" ");}
+
+/* =========================================================================
+   GÉNÉRATION
+   ========================================================================= */
+const state = {hexes:[], byKey:new Map(), climate:"temperate", selected:null};
+
+function genBiomeStart(){ // table d10 hex de départ -> index biome
+  const r=d10();
+  if(r<=4)return 0; if(r<=6)return 1; if(r<=8)return 2; if(r===9)return 3; return 4;
+}
+function genBiomeNext(prevIdx){ // table d10 hex suivant
+  const r=d10();
+  if(r<=5)return prevIdx; if(r===6)return 0; if(r===7)return 1; if(r===8)return 2; if(r===9)return 3; return 4;
+}
+
+// Liste des coordonnées axiales pour le mode "livre" (couches concentriques)
+function bookCoords(layers){
+  const coords=[{q:0,r:0}];
+  for(let k=1;k<=layers;k++){
+    // anneau de rayon k : on part d'un coin et on parcourt les 6 côtés
+    let cube=[-k,0,k]; // un coin de départ
+    for(let side=0;side<6;side++){
+      for(let i=0;i<k;i++){
+        coords.push({q:cube[0], r:cube[1]});
+        cube=[cube[0]+CUBE_DIRS[side][0], cube[1]+CUBE_DIRS[side][1], cube[2]+CUBE_DIRS[side][2]];
+      }
+    }
+  }
+  return coords;
+}
+
+// Coordonnées pour la grille rectangulaire (offset "odd-q", flat-top)
+function gridCoords(cols,rows){
+  const coords=[];
+  for(let col=0;col<cols;col++){
+    for(let row=0;row<rows;row++){
+      const q=col;
+      const r=row-((col-(col&1))/2);
+      coords.push({q,r,col,row});
+    }
+  }
+  return coords;
+}
+
+function neighborsGenerated(q,r,map){
+  const res=[];
+  for(const d of CUBE_DIRS){const nq=q+d[0], nr=r+d[1]; const h=map.get(key(nq,nr)); if(h)res.push(h);}
+  return res;
+}
+
+function generate(opts){
+  RNG = opts.seed!=null ? mulberry32(opts.seed) : Math.random;
+  const climate = opts.climate;
+  const set = BIOMES[climate];
+  const map = new Map();
+  let coords;
+  if(opts.mode==="book") coords = bookCoords(opts.layers);
+  else coords = gridCoords(opts.cols, opts.rows);
+
+  const hexes=[];
+  coords.forEach((c,i)=>{
+    const h={i, q:c.q, r:c.r, num:i+1};
+    // ----- BIOME -----
+    if(i===0){
+      h.biomeIdx = genBiomeStart();
+    } else {
+      // "hexagone précédent" = un voisin déjà généré (le plus proche du centre / déjà placé)
+      const ngen = neighborsGenerated(c.q,c.r,map);
+      let prev;
+      if(ngen.length){
+        // privilégie le voisin le plus proche du centre (distance cube)
+        prev = ngen.reduce((a,b)=> (cubeDist(b.q,b.r) < cubeDist(a.q,a.r) ? b : a));
+      }
+      h.biomeIdx = prev ? genBiomeNext(prev.biomeIdx) : genBiomeStart();
+    }
+    map.set(key(c.q,c.r), h);
+    hexes.push(h);
+  });
+
+  // ----- BIOMES PROFONDS : amas de 7 hex identiques -----
+  if(opts.deep){
+    for(const h of hexes){
+      const ng = [];
+      for(const d of CUBE_DIRS){const nb=map.get(key(h.q+d[0],h.r+d[1])); ng.push(nb);}
+      if(ng.every(nb=>nb && nb.biomeIdx===h.biomeIdx)){
+        const baseName = set[h.biomeIdx].name;
+        if(DEEP[baseName]) h.deep = baseName;
+      }
+    }
+  }
+
+  // ----- POINTS D'INTÉRÊT + DÉTAILS -----
+  hexes.forEach((h,i)=>{
+    const biome = set[h.biomeIdx];
+    h.biomeName = h.deep ? DEEP[h.deep].name : biome.name;
+    h.color = h.deep ? DEEP[h.deep].color : biome.color;
+    h.emoji = h.deep ? DEEP[h.deep].emoji : biome.emoji;
+    // rencontre du biome (2d6)
+    if(h.deep){const dr=d6(); h.encRoll="1d6="+dr; h.enc=DEEP[h.deep].enc[dr-1];}
+    else {const er=d2d6(); h.encRoll="2d6="+er; h.enc=ENCOUNTERS[climate][biome.name][er-2];}
+
+    // type de point d'intérêt
+    if(opts.trad && i===0){ h.poi="village"; h.poiRoll="(traditionnel)"; }
+    else if(opts.trad && i===1){ h.poi="dungeon"; h.poiRoll="(traditionnel)"; }
+    else {
+      const r=d6(); h.poiRoll="1d6="+r;
+      if(r<=3) h.poi="landmark";
+      else if(r===4){ const s=d6(); h.poi=SETTLEMENTS[s-1]; h.settleRoll="1d6="+s; }
+      else if(r===5) h.poi="lair";
+      else h.poi="dungeon";
+    }
+
+    // détails selon le type
+    if(h.poi==="landmark") h.landmark = genLandmark();
+    if(["hamlet","village","city","castle","tower","abbey"].includes(h.poi)) h.settlement = genSettlement(h.poi);
+  });
+
+  // ----- CHOIX DES TUILES (variantes déterministes via la graine) -----
+  hexes.forEach(h=>{
+    const baseName=set[h.biomeIdx].name;
+    const bt=(h.deep && TILES.deep[h.deep]) ? TILES.deep[h.deep] : TILES.biomes[baseName];
+    h.biomeTile=bt[Math.floor(RNG()*bt.length)];
+    const pdef=TILES.poi[h.poi];
+    if(pdef){ h.poiTile=pdef.files[Math.floor(RNG()*pdef.files.length)]; h.poiFull=pdef.full; h.poiW=pdef.w; h.poiH=pdef.h; }
+  });
+
+  state.hexes=hexes; state.byKey=map; state.climate=climate; state.set=set; state.selected=null;
+}
+function cubeDist(q,r){const s=-q-r;return (Math.abs(q)+Math.abs(r)+Math.abs(s))/2;}
+
+function genLandmark(){
+  const tr=d6();
+  const typeKey = tr<=3?"naturel":(tr<=5?"artificiel":"magique");
+  const T=LANDMARKS[typeKey];
+  const cr=d6(); const cat=T.cats[cr-1];
+  const nr=d10(); const nature=cat[1][nr-1];
+  // contenu
+  const ct=d6(); let content, contentKind, treasureChance, detail=null, detailRoll=null;
+  if(ct===1){contentKind="Danger"; treasureChance=25; const dd=d20(); detail=CONTENT_DANGER[dd-1]; detailRoll="1d20="+dd;}
+  else if(ct<=3){contentKind="Vide"; treasureChance=15; const dd=d20(); detail=CONTENT_VIDE[dd-1]; detailRoll="1d20="+dd;}
+  else if(ct===4){contentKind="Spécial"; treasureChance=null; const dd=die(12); detail=CONTENT_SPECIAL[dd-1]; detailRoll="1d12="+dd;}
+  else {contentKind="Monstres"; treasureChance=50;}
+  let treasure=null;
+  if(treasureChance!=null){const tj=d100(); treasure = (tj<=treasureChance)?("Oui ("+tj+"≤"+treasureChance+"%)"):("Non ("+tj+">"+treasureChance+"%)");}
+  return {type:T.label, typeRoll:"1d6="+tr, category:cat[0], catRoll:"1d6="+cr, nature, natureRoll:"1d10="+nr,
+          contentKind, contentRoll:"1d6="+ct, treasureChance, treasure, detail, detailRoll};
+}
+
+function genName(){
+  const r=d6();
+  if(r===1) return pick(NAME_A)+"-"+pick(NAME_B);
+  if(r===2) return pick(NAME_E)+"-"+pick(NAME_B);
+  if(r===3) return "Val-"+pick(NAME_B);
+  if(r===4) return "Mont-"+pick(NAME_B);
+  if(r===5) return pick(NAME_B)+"-sur-Rivière";
+  return pick(NAME_A)+"-"+pick(NAME_B);
+}
+function genNoble(){
+  const t=d20(); let ti=NOBLE_TITLES.find(x=>t<=x.max);
+  const female = RNG()<0.45;
+  const last = pick(NOBLE_LAST)+pick(NOBLE_LAST2);
+  return {titleRoll:"1d20="+t, title: female?ti.f:ti.m, domain:ti.domain,
+          name: pick(NOBLE_FIRST)+" "+last};
+}
+function genSettlement(kind){
+  const s={kind, name:genName()};
+  // factions : ville, château, tour, abbaye créent une faction
+  if(["city","castle","tower","abbey"].includes(kind)){
+    s.faction = {};
+    if(kind==="castle"||kind==="city"){ s.faction.noble = genNoble(); }
+    s.faction.relation = FACTION_REL[d2d6()-2];
+    s.faction.altName = pick(FACTION_NAMES);
+    s.faction.territory = (kind==="city"||kind==="castle") ? "7 hexagones" : "1 hexagone";
+  }
+  // événement de faction (1d6 -> si 1)
+  return s;
+}
+
+/* =========================================================================
+   RENDU SVG
+   ========================================================================= */
+function render(){
+  const hexes=state.hexes;
+  if(!hexes.length){return;}
+  const useTiles=document.getElementById('tiles').checked;
+  const showpoi=document.getElementById('showpoi').checked;
+  const shownum=document.getElementById('shownum').checked;
+  // positions + bornes
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  for(const h of hexes){
+    const o=axialToOffset(h.q,h.r); h.col=o.col; h.row=o.row;
+    const t=tileXY(o.col,o.row); h.tx=t.x; h.ty=t.y;
+    h.fx=t.x+FACE_CX; h.fy=t.y+FACE_CY;
+    minX=Math.min(minX,t.x); maxX=Math.max(maxX,t.x+TILE_W);
+    minY=Math.min(minY,t.y); maxY=Math.max(maxY,t.y+TILE_H);
+  }
+  const pad=10;
+  const vb=[minX-pad,minY-pad,(maxX-minX)+2*pad,(maxY-minY)+2*pad];
+  state.vb=vb;
+  // ordre arrière->avant : les tuiles 2.5D du fond se superposent correctement
+  const order=[...hexes].sort((a,b)=> a.row-b.row || a.col-b.col);
+  let body="";
+  if(useTiles){
+    for(const h of order){
+      body+=`<image href="${tileURL('t',h.biomeTile)}" x="${h.tx}" y="${h.ty}" width="${TILE_W}" height="${TILE_H}"/>`;
+      if(showpoi && h.poiTile){
+        if(h.poiFull) body+=`<image href="${tileURL('d',h.poiTile)}" x="${h.tx}" y="${h.ty}" width="${TILE_W}" height="${TILE_H}"/>`;
+        else { const w=h.poiW,hh=h.poiH, x=(h.tx+128-w/2).toFixed(1), y=(h.ty+ANCHOR_Y-hh).toFixed(1);
+          body+=`<image href="${tileURL('d',h.poiTile)}" x="${x}" y="${y}" width="${w}" height="${hh}"/>`; }
+      }
+    }
+  } else {
+    for(const h of order){
+      body+=`<polygon points="${hexPolyTile(h.tx,h.ty)}" fill="${h.color}" stroke="#14161a" stroke-width="2"/>`;
+      const poi=POI[h.poi];
+      if(showpoi && poi) body+=`<text class="poi" x="${h.fx}" y="${h.fy}" font-size="74">${poi.emoji}</text>`;
+    }
+  }
+  // couche interactive (silhouette réelle des tuiles) + numéros, en ordre arrière->avant
+  let top="";
+  for(const h of order){
+    const sel=state.selected===h.i;
+    top+=`<polygon class="hit${sel?' sel':''}" data-i="${h.i}" points="${hexPolyTile(h.tx,h.ty)}"/>`;
+    if(shownum) top+=`<text class="hexnum" x="${h.fx}" y="${h.ty+150}">${h.num}</text>`;
+  }
+  document.getElementById('svgWrap').innerHTML=`<svg viewBox="${vb.join(' ')}" preserveAspectRatio="xMidYMid meet">${body}${top}</svg>`;
+  document.querySelectorAll('.hit').forEach(el=>{
+    el.addEventListener('click',()=>{ state.selected=+el.dataset.i; render(); showDetail(state.hexes[state.selected]); });
+  });
+}
+
+function renderLegend(){
+  const set = BIOMES[document.getElementById('climate').value];
+  let h="";
+  for(const b of set) h+=`<div class="li"><span class="sw" style="background:${b.color}"></span>${b.name}</div>`;
+  document.getElementById('legend').innerHTML=h;
+}
+
+/* =========================================================================
+   PANNEAU DÉTAIL
+   ========================================================================= */
+function kv(k,v){return `<div class="kv"><div class="k">${k}</div><div class="v">${v}</div></div>`;}
+function showDetail(h){
+  const poi=POI[h.poi];
+  let html=`<h2>Hexagone ${h.num} ${poi?poi.emoji:""}</h2>`;
+  html+=`<span class="biome-tag" style="background:${h.color}">${h.biomeName}${h.deep?" (profond)":""}</span>`;
+  html+=kv("Coordonnées axiales", `q=${h.q}, r=${h.r}`);
+  html+=kv("Point d'intérêt", `${poi?poi.name:"—"} <span class="badge">${h.poiRoll||""}</span>`);
+
+  // Point de repère
+  if(h.landmark){const L=h.landmark;
+    html+=`<div class="card"><div class="title">📍 Point de repère — ${L.type} <span class="badge">${L.typeRoll}</span></div>`;
+    html+=kv("Catégorie", `${L.category} <span class="badge">${L.catRoll}</span>`);
+    html+=kv("Nature", `${L.nature} <span class="badge">${L.natureRoll}</span>`);
+    html+=kv("Contenu", `${L.contentKind} <span class="badge">${L.contentRoll}</span>`);
+    if(L.detail) html+=kv(L.contentKind==="Danger"?"Danger précis":(L.contentKind==="Vide"?"À apprendre ici":"Situation"), `${L.detail} <span class="badge">${L.detailRoll}</span>`);
+    if(L.treasure) html+=kv("Trésor", L.treasure);
+    if(L.contentKind==="Monstres") html+=kv("Monstres", `voir rencontre du biome ↓ <span class="badge">trésor 50%</span>`);
+    html+=`</div>`;
+  }
+
+  // Peuplement
+  if(h.settlement){const S=h.settlement;
+    html+=`<div class="card"><div class="title">${poi.emoji} ${poi.name}</div>`;
+    html+=kv("Nom", S.name);
+    if(h.settleRoll) html+=kv("Sous-table peuplement", h.settleRoll);
+    if(S.faction){const F=S.faction;
+      html+=kv("Crée une faction", "Oui");
+      if(F.noble) html+=kv("Dirigeant", `${F.noble.title} ${F.noble.name} <span class="badge">${F.noble.titleRoll}</span><br><small>Domaine : ${F.noble.domain}</small>`);
+      html+=kv("Territoire", F.territory);
+      html+=kv("Nom de faction (alt.)", F.altName);
+      html+=kv("Relation aux voisins (2d6)", F.relation);
+    } else {
+      html+=kv("Faction", "Aucune (les hameaux/villages n'en créent pas)");
+    }
+    html+=`</div>`;
+  }
+
+  if(h.poi==="lair") html+=`<div class="card"><div class="title">🐲 Repaire</div><div class="kv"><div class="v">Crée une faction (territoire 1 hexagone). Détail des monstres : voir livre p. 59.</div></div></div>`;
+  if(h.poi==="dungeon") html+=`<div class="card"><div class="title">💀 Donjon</div><div class="kv"><div class="v">Ne crée pas de faction. Génération détaillée : voir livre p. 63.</div></div></div>`;
+
+  // Rencontre du biome
+  html+=`<div class="card"><div class="title">⚔️ Rencontre (${h.biomeName})</div>`;
+  html+=kv("Monstre", `${h.enc} <span class="badge">${h.encRoll}</span>`);
+  html+=`</div>`;
+
+  document.getElementById('detail').innerHTML=html;
+}
+
+/* =========================================================================
+   UI / ÉVÉNEMENTS
+   ========================================================================= */
+function readOpts(){
+  const mode=document.querySelector('input[name=mode]:checked').value;
+  let seedRaw=document.getElementById('seed').value.trim();
+  let seed=null;
+  if(seedRaw!==""){seed = /^\d+$/.test(seedRaw)? (parseInt(seedRaw,10)>>>0) : hashSeed(seedRaw);}
+  return {
+    mode,
+    layers:+document.getElementById('layers').value,
+    cols:+document.getElementById('cols').value,
+    rows:+document.getElementById('rows').value,
+    climate:document.getElementById('climate').value,
+    trad:document.getElementById('trad').checked,
+    deep:document.getElementById('deep').checked,
+    seed, seedRaw
+  };
+}
+function doGenerate(useSeed){
+  const o=readOpts();
+  if(o.seed==null){ // graine aléatoire si vide -> on en fabrique une pour pouvoir partager
+    o.seed = (Math.floor(Math.random()*0xFFFFFFFF))>>>0;
+    document.getElementById('seed').value = o.seed;
+  }
+  generate(o);
+  render();
+  document.getElementById('detail').innerHTML=`<div class="empty">Carte générée (${state.hexes.length} hexagones).<br>Clique sur un hexagone.</div>`;
+}
+function toast(msg){const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; setTimeout(()=>t.style.display='none',1600);}
+
+/* ---- Exports ---- */
+function downloadBlob(blob, filename){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click();
+  a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function exportPNG(){
+  if(!state.hexes.length){toast("Génère d'abord une carte"); return;}
+  if(document.getElementById('tiles').checked){ toast("PNG en mode couleurs+emoji (les tuiles requièrent un serveur local)"); }
+  const svgEl=document.querySelector('#svgWrap svg');
+  const scale=2;                                   // x2 pour une image nette
+  const w=Math.ceil(state.vb[2]*scale), h=Math.ceil(state.vb[3]*scale);
+  const clone=svgEl.cloneNode(true);
+  clone.setAttribute('width', w); clone.setAttribute('height', h);
+  clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  // fond opaque (sinon PNG transparent)
+  const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
+  bg.setAttribute('x',state.vb[0]); bg.setAttribute('y',state.vb[1]);
+  bg.setAttribute('width',state.vb[2]); bg.setAttribute('height',state.vb[3]); bg.setAttribute('fill','#1d1f23');
+  clone.insertBefore(bg, clone.firstChild);
+  const data=new XMLSerializer().serializeToString(clone);
+  const img=new Image();
+  img.onload=()=>{
+    const c=document.createElement('canvas'); c.width=w; c.height=h;
+    const ctx=c.getContext('2d'); ctx.drawImage(img,0,0,w,h);
+    try{
+      c.toBlob(b=>{ downloadBlob(b, "hexmap-"+(document.getElementById('seed').value||"map")+".png"); toast("PNG exporté ✓"); }, 'image/png');
+    }catch(e){ toast("Export PNG bloqué (tiles externes) — voir note"); }
+  };
+  img.onerror=()=>toast("Échec du rendu SVG→PNG");
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(data);
+}
+function exportMD(){
+  if(!state.hexes.length){toast("Génère d'abord une carte"); return;}
+  const o=readOpts();
+  let md="# Carte hexagonale — Sandbox Generator\n\n";
+  md+=`- **Mode** : ${o.mode==="book"?"Procédure du livre ("+o.layers+" couches)":"Grille "+o.cols+"×"+o.rows}\n`;
+  md+=`- **Climat** : ${o.climate}\n- **Graine** : ${document.getElementById('seed').value}\n`;
+  md+=`- **Hexagones** : ${state.hexes.length}\n\n---\n\n`;
+  for(const h of state.hexes){
+    const poi=POI[h.poi];
+    md+=`## Hexagone ${h.num} — ${h.biomeName}${h.deep?" (profond)":""}\n`;
+    md+=`- **Point d'intérêt** : ${poi?poi.name:"—"}\n`;
+    if(h.settlement){const S=h.settlement;
+      md+=`- **Nom** : ${S.name}\n`;
+      if(S.faction){const F=S.faction;
+        if(F.noble) md+=`- **Dirigeant** : ${F.noble.title} ${F.noble.name} (${F.noble.domain})\n`;
+        md+=`- **Faction** : ${F.altName} — territoire ${F.territory}, relation voisins : ${F.relation}\n`;
+      }
+    }
+    if(h.landmark){const L=h.landmark;
+      md+=`- **Repère** : ${L.type} › ${L.category} › ${L.nature}\n`;
+      md+=`- **Contenu** : ${L.contentKind}${L.detail?" — "+L.detail:""}${L.treasure?" | Trésor : "+L.treasure:""}\n`;
+    }
+    md+=`- **Rencontre (${h.biomeName})** : ${h.enc}\n\n`;
+  }
+  downloadBlob(new Blob([md],{type:'text/markdown;charset=utf-8'}), "hexmap-"+(document.getElementById('seed').value||"map")+".md");
+  toast("Feuille MJ exportée ✓");
+}
+
+document.querySelectorAll('input[name=mode]').forEach(r=>r.addEventListener('change',()=>{
+  const book=document.querySelector('input[name=mode]:checked').value==="book";
+  document.getElementById('bookOpts').style.display=book?'block':'none';
+  document.getElementById('gridOpts').style.display=book?'none':'flex';
+}));
+document.getElementById('climate').addEventListener('change',renderLegend);
+document.getElementById('shownum').addEventListener('change',render);
+document.getElementById('tiles').addEventListener('change',render);
+document.getElementById('showpoi').addEventListener('change',render);
+document.getElementById('gen').addEventListener('click',()=>doGenerate());
+document.getElementById('reroll').addEventListener('click',()=>{ document.getElementById('seed').value=''; doGenerate(); });
+document.getElementById('exportpng').addEventListener('click',exportPNG);
+document.getElementById('exportmd').addEventListener('click',exportMD);
+document.getElementById('copyseed').addEventListener('click',()=>{
+  const o=readOpts();
+  const params=new URLSearchParams({mode:o.mode,layers:o.layers,cols:o.cols,rows:o.rows,climate:o.climate,trad:o.trad?1:0,deep:o.deep?1:0,seed:document.getElementById('seed').value});
+  const url=location.origin+location.pathname+"?"+params.toString();
+  navigator.clipboard?.writeText(url).then(()=>toast("Lien copié ✓"),()=>toast(url));
+});
+
+// Restaurer depuis l'URL si présent
+(function init(){
+  const p=new URLSearchParams(location.search);
+  if(p.has('mode')){
+    document.querySelector(`input[name=mode][value="${p.get('mode')}"]`).checked=true;
+    document.getElementById('layers').value=p.get('layers')||2;
+    document.getElementById('cols').value=p.get('cols')||8;
+    document.getElementById('rows').value=p.get('rows')||6;
+    document.getElementById('climate').value=p.get('climate')||'temperate';
+    document.getElementById('trad').checked=p.get('trad')==='1';
+    document.getElementById('deep').checked=p.get('deep')==='1';
+    if(p.get('seed')) document.getElementById('seed').value=p.get('seed');
+    const book=p.get('mode')==="book";
+    document.getElementById('bookOpts').style.display=book?'block':'none';
+    document.getElementById('gridOpts').style.display=book?'none':'flex';
+  }
+  renderLegend();
+  doGenerate();
+})();
+</script>
+</body>
+</html>

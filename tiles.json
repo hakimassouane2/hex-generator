@@ -1,0 +1,39 @@
+{
+  "_doc": "Mapping tuiles -> biomes/PI. Relu/modifiable à la main. Source de vérité dupliquée dans index.html (const TILES). Si tu édites ici, préviens-moi pour resynchroniser.",
+  "terrainDir": "assets/tiles/Hex Basic Set Painted 2D Terrain v1.3.0 extracted/",
+  "decorDir": "assets/tiles/Hex Medieval-Fantasy Locations v1.3.4 - done/Assets/Hex Medieval Fantasy Locations/Decor/",
+  "biomes": {
+    "Prairie": ["hexPlains00","hexPlains01","hexPlains02","hexPlains03"],
+    "Forêt": ["hexForestBroadleaf00","hexForestBroadleaf01","hexForestBroadleaf02","hexForestBroadleaf03","hexWoodlands00","hexWoodlands01","hexWoodlands02","hexWoodlands03"],
+    "Collines": ["hexHills00","hexHills01","hexHills02","hexHills03"],
+    "Marais": ["hexMarsh00","hexMarsh01","hexMarsh02","hexMarsh03"],
+    "Montagnes": ["hexMountain00","hexMountain01","hexMountain02","hexMountain03"],
+
+    "Lande": ["hexHighlands00","hexHighlands01","hexHighlands02","hexHighlands03"],
+    "Forêt de conifères": ["hexForestPineSnowCovered00","hexWoodlands00","hexWoodlands01","hexWoodlands02","hexWoodlands03"],
+    "Toundra": ["hexScrublands00","hexScrublands01","hexScrublands02","hexScrublands03"],
+    "Champs de neige": ["hexSnowField00"],
+    "Pics gelés": ["hexMountainSnow00","hexMountain00","hexMountain01","hexMountain02","hexMountain03"],
+
+    "Savane": ["hexScrublands00","hexScrublands01","hexScrublands02","hexScrublands03"],
+    "Forêt tropicale": ["hexJungle00"],
+    "Désert": ["hexDesertDunes00","hexDesertDunes01","hexDesertDunes02","hexDesertDunes03","hexSandPalms00","hexDesertYellowHills00"],
+    "Marécage": ["hexSwamp00","hexWetlands00","hexMarsh00","hexMarsh01","hexMarsh02","hexMarsh03"],
+    "Plateau": ["hexDesertYellowMesaLarge00","hexDesertRedMountains00","hexMountain00","hexMountain01"]
+  },
+  "deep": {
+    "Volcan": ["hexVolcanoActive00","hexLavaField00","hexAshPlains00"],
+    "Oasis": ["hexDesertDunesOasis00"]
+  },
+  "poi": {
+    "hamlet":  {"full": true,  "files": ["villageSmall00","villageSmall01","villageSmall02","villageSmall03"]},
+    "village": {"full": true,  "files": ["village00","village01","village02","village03","villageThatched00","villageWood00"]},
+    "city":    {"full": true,  "files": ["walledCity","walledCityMossy"]},
+    "castle":  {"full": true,  "files": ["castle","castle2","castle3","castleFortified"]},
+    "tower":   {"full": false, "w": 162, "h": 286, "files": ["wizardTower00","wizardTowerDark00","wizardTowerRuins00"]},
+    "abbey":   {"full": true,  "files": ["church00","temple"]},
+    "lair":    {"full": false, "w": 233, "h": 176, "files": ["undergroundPassageOpen00","banditCamp00"]},
+    "dungeon": {"full": true,  "files": ["templeRuins","castleRuinDirt","castleRuinForest"]},
+    "landmark":{"full": false, "w": 70,  "h": 85,  "files": ["sign00"]}
+  }
+}
