@@ -190,6 +190,9 @@
         cursor: pointer;
       }
       .opt input {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 auto;
         accent-color: var(--accent);
       }
       .hint {
@@ -1002,13 +1005,15 @@
         const p = document.getElementById("panel");
         // pied de panneau commun (toujours visible quel que soit l'outil)
         const footer = `<div class="spacer"></div><button class="danger" id="clearBtn">${ic("trash")} Tout effacer</button>`;
+        // gomme (placée sous l'aperçu / sous l'option de variante) — même style que les options
+        const erase = `<label class="opt"><input type="checkbox" id="eraseChk" ${state.erase ? "checked" : ""}> ${ic("eraser")} Gomme</label>`;
         if (state.tool === "tiles") {
           const it = state.brushTile;
           p.innerHTML = `<h2>Tuiles</h2>
-      <label class="erase"><input type="checkbox" id="eraseChk" ${state.erase ? "checked" : ""}> ${ic("eraser")} Gomme</label>
       <div class="preview" id="catOpen">
         ${it ? `<img id="tilePrevImg" src="${url(it.variants[Math.min(state.tileVar, it.variants.length - 1)])}"><div class="nm">${it.name}</div><div class="sub">${it._group}${it.variants.length > 1 ? " · ×" + it.variants.length + " variantes" : ""}</div>` : '<div class="sub">Aucune tuile</div>'}
       </div>
+      ${erase}
       ${footer}`;
           document.getElementById("catOpen").onclick = () =>
             openCatalog("tiles");
@@ -1032,12 +1037,12 @@
             ? `<label class="opt"><input type="checkbox" id="randChk" ${state.objRandom ? "checked" : ""}> ${ic("shuffle")} Variante aléatoire</label>`
             : "";
           p.innerHTML = `<h2>Objets</h2>
-      <label class="erase"><input type="checkbox" id="eraseChk" ${state.erase ? "checked" : ""}> ${ic("eraser")} Gomme</label>
       <div class="preview" id="catOpen">
         ${it ? `<img src="${prevSrc}"><div class="nm">${it.name}</div><div class="sub">${it._group}${it.variants.length > 1 ? " · ×" + it.variants.length : ""}</div>` : '<div class="sub">Aucun objet</div>'}
       </div>
       ${vthumbs}
       ${randOpt}
+      ${erase}
       ${footer}`;
           document.getElementById("catOpen").onclick = () =>
             openCatalog("objects");
@@ -1127,6 +1132,14 @@
       }
       document.getElementById("modalClose").onclick = () =>
         document.getElementById("modal").classList.remove("open");
+      // Échap ferme le catalogue (même si le focus est dans le champ de recherche)
+      window.addEventListener("keydown", (e) => {
+        const m = document.getElementById("modal");
+        if (e.key === "Escape" && m.classList.contains("open")) {
+          e.preventDefault();
+          m.classList.remove("open");
+        }
+      });
       document.getElementById("modalSearch").oninput = (e) =>
         renderCatalog(e.target.value);
       document.getElementById("modal").addEventListener("mousedown", (e) => {
