@@ -1,5 +1,8 @@
 # Génère catalog.js (catalogue structuré pour l'éditeur) à partir des PNG.
-# Regroupement automatique par nom de fichier.
+# Les TUILES (full-hex 256x384) sont regroupées d'après la taxonomie du site de
+# référence (westmarches.games) : groupe "Terrain" (sélection rapide) puis groupes
+# par biome. Toute tuile présente dans nos assets mais absente de la taxonomie est
+# rangée dans "Unknown" (à trier manuellement plus tard).
 import os, re, json, glob
 from collections import defaultdict, OrderedDict
 from PIL import Image
@@ -25,45 +28,160 @@ def dims(p):
 def stem_of(name):
     return re.sub(r'(\d+)(_[a-zA-Z]+)?$', '', name)
 
-# ---- biomes (tokens longest-first -> groupe d'affichage) ----
-BIOME_TOKENS = [
-    ('ForestBroadleaf','Forest'),('ForestPineSnowCovered','Forest'),('ForestPine','Forest'),
-    ('ForestBurned','Forest'),('Forest','Forest'),('Woodlands','Forest'),
-    ('Jungle','Jungle'),
-    ('PlainsColdSnowTransition','Plains'),('PlainsCold','Plains'),('PlainsFarm','Plains'),('Plains','Plains'),
-    ('Highlands','Hills'),('Hills','Hills'),
-    ('MountainSnow','Mountains'),('Mountain','Mountains'),
-    ('DesertDunesOasis','Desert'),('DesertDunes','Desert'),('DesertRedMountains','Desert'),
-    ('DesertRedForest','Desert'),('DesertRedDirt','Desert'),('DesertYellowCactiForest','Desert'),
-    ('DesertYellowMesaLarge','Desert'),('DesertYellowHills','Desert'),('DesertRed','Desert'),
-    ('DesertYellow','Desert'),('Desert','Desert'),('SandPalms','Desert'),
-    ('Marsh','Marsh'),('Swamp','Swamp'),('Wetlands','Marsh'),
-    ('SnowField','Snow'),
-    ('Scrublands','Scrublands'),
-    ('LavaField','Volcanic'),('VolcanoActive','Volcanic'),('AshPlains','Volcanic'),('Volcano','Volcanic'),
-    ('OceanCalm','Eaux'),('Ocean','Eaux'),
-    ('UnderOcean','Souterrain'),('UnderVoid','Souterrain'),('UnderDirt','Souterrain'),
-    ('Undercliff','Souterrain'),('Void','Souterrain'),
-    ('Dirt','Terre'),
-    ('Base','Base'),
-]
-BIOME_ORDER = ['Plains','Forest','Jungle','Hills','Mountains','Desert','Marsh','Swamp',
-               'Snow','Scrublands','Volcanic','Eaux','Terre','Souterrain','Base','Autres']
-
 def split_words(s):
     s = re.sub(r'(\d+)(_[a-zA-Z]+)?$', '', s)
     s = s.replace('_', ' ')
     s = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', s)
     return s.strip().title()
 
-def biome_of(stem):
-    # stem commence par "hex"
-    body = stem[3:] if stem.startswith('hex') else stem
-    for tok, grp in BIOME_TOKENS:
-        if body.startswith(tok):
-            feature = body[len(tok):]
-            return grp, tok, feature
-    return 'Autres', '', body
+# ============================================================================
+# Taxonomie de référence (westmarches.games). Chaque groupe : liste ordonnée de
+# (nom affiché, stem du fichier). Un même stem peut apparaître dans plusieurs
+# groupes (ex. "Terrain" duplique des tuiles ; les pins sont en Forest ET Cold).
+# ============================================================================
+WM_TAXONOMY = [
+    ('Terrain', [
+        ('Plains', 'hexPlains'), ('Forest', 'hexForestBroadleaf'),
+        ('Mountains', 'hexMountain'), ('Mountains River', 'hexMountain00-river000010'),
+        ('Hills', 'hexHills'), ('Desert', 'hexDesertDunes'),
+        ('Lake', 'hexLake'), ('Calm Ocean', 'hexOceanCalm'), ('Ocean', 'hexOcean'),
+        ('Marsh', 'hexMarsh'), ('Dirt', 'hexDirt'), ('Highlands', 'hexHighlands'),
+        ('Scrublands', 'hexScrublands'), ('Woodlands', 'hexWoodlands'),
+    ]),
+    ('Plains', [
+        ('Plains', 'hexPlains'), ('Castle', 'hexPlainsCastle'),
+        ('Village', 'hexPlainsVillage'), ('Small Village', 'hexPlainsVillageSmall'),
+        ('Thatched Village', 'hexPlainsVillageThatched'), ('Wooden Village', 'hexPlainsVillageWood'),
+        ('Village Ruins', 'hexPlainsVillageRuin'), ('Farm', 'hexPlainsFarm'),
+        ('Burned Farms', 'hexPlainsFarmBurned'), ('Temple', 'hexPlainsTemple'),
+        ('Ruins', 'hexPlainsTempleRuins'), ('Walled City', 'hexPlainsWalledCity'),
+        ('Barracks', 'hexPlainsBarracks'), ('Church', 'hexPlainsChurch'),
+        ('Cookhouse', 'hexPlainsCookhouse'), ('Inn', 'hexPlainsInn'),
+        ('Marketplace', 'hexPlainsMarketplace'), ('Scriptorium', 'hexPlainsScriptorium'),
+        ('Smithy', 'hexPlainsSmithy'), ('Warehouse', 'hexPlainsWarehouse'),
+        ('Windmill', 'hexPlainsWindmill'), ('Barn', 'hexPlainsFarmBarn'),
+        ('Silo', 'hexPlainsFarmSilo'), ('Stronghold', 'hexPlainsStrongholdThatched'),
+        ('Halfling Village', 'hexPlainsHalflingVillage'), ('Elven Lodge', 'hexPlainsElvenLodge'),
+        ('Henge', 'hexPlainsHenge'),
+    ]),
+    ('Forest', [
+        ('Forest', 'hexForestBroadleaf'), ('Bandit Camp', 'hexForestBroadleafBanditCamp'),
+        ('Forest Clearing', 'hexForestBroadleafClearing'), ('Elf Village', 'hexForestBroadleafElfVillage'),
+        ('Elf Ruins', 'hexForestBroadleafElfRuins'), ('Forester Hut', 'hexForestBroadleafForester'),
+        ('Giant Tree', 'hexForestBroadleafGiantTree'), ('Standing Stones', 'hexForestBroadleafStandingStones'),
+        ('Elven Lodge', 'hexForestElvenLodge'), ('Forest Ruins', 'hexForestCastleRuins'),
+        ('Pine Forest', 'hexForestPine'), ('Pine Forest Clearing', 'hexForestPineClearing'),
+        ('Pine Forest Logging Camp', 'hexForestPineLoggingCamp'),
+    ]),
+    ('Mountain', [
+        ('Mountains', 'hexMountain'), ('Mountain Mine', 'hexMountainMine'),
+        ('Mountain Cave', 'hexMountainCave'), ('Mountain Fortress', 'hexMountainFortress'),
+        ('Dwarf Fortress', 'hexMountainDwarfFortress'), ('Underground Gates', 'hexMountainUndergroundGateArch'),
+        ('Mountains River', 'hexMountain00-river000010'), ('Highlands', 'hexHighlands'),
+    ]),
+    ('Hills', [
+        ('Hills', 'hexHills'), ('Hills Mine', 'hexHillsMine'),
+        ('Barrow Downs', 'hexHillsBarrowDowns'), ('Ruined Wizard Tower', 'hexHillsWizardTowerRuin'),
+        ('Wizard Tower', 'hexHillsWizardTower'),
+    ]),
+    ('Desert', [
+        ('Desert', 'hexDesertDunes'), ('Desert Oasis', 'hexDesertDunesOasis'),
+        ('Desert Pyramids', 'hexDesertDunesPyramids'), ('Desert Sphinx', 'hexDesertDunesSphinx'),
+        ('Desert Ruins', 'hexDesertDunesRuins'),
+        ('Red Desert Base', 'hexDesertRedBase'), ('Red Desert Dirt', 'hexDesertRedDirt'),
+        ('Red Desert Forest', 'hexDesertRedForest'), ('Red Desert Forest Oasis', 'hexDesertRedForestOasis'),
+        ('Red Desert Grass', 'hexDesertRedGrass'), ('Red Desert Grass Dunes', 'hexDesertRedGrassDunes'),
+        ('Red Desert Grass Oasis', 'hexDesertRedGrassOasis'), ('Red Desert Hills', 'hexDesertRedHills'),
+        ('Red Desert Hills Oasis', 'hexDesertRedHillsOasis'), ('Red Desert Large Mesa', 'hexDesertRedMesaLarge'),
+        ('Red Desert Large Mesa Cave', 'hexDesertRedMesaLargeCave'), ('Red Desert Mountains', 'hexDesertRedMountains'),
+        ('Red Desert Mountains Cave', 'hexDesertRedMountainsCave'),
+        ('Yellow Desert Base', 'hexDesertYellowBase'), ('Yellow Desert Cacti Forest', 'hexDesertYellowCactiForest'),
+        ('Yellow Desert Crater', 'hexDesertYellowCrater'), ('Yellow Desert Dirt', 'hexDesertYellowDirt'),
+        ('Yellow Desert Dirt Dunes', 'hexDesertYellowDirtDunes'), ('Yellow Desert Hills', 'hexDesertYellowHills'),
+        ('Yellow Desert Hills Oasis', 'hexDesertYellowHillsOasis'), ('Yellow Desert Large Mesa', 'hexDesertYellowMesaLarge'),
+        ('Yellow Desert Large Mesa Cave', 'hexDesertYellowMesaLargeCave'), ('Yellow Desert Large Mesa Oasis', 'hexDesertYellowMesaLargeOasis'),
+        ('Yellow Desert Mesas', 'hexDesertYellowMesas'), ('Yellow Desert Mesas Cave', 'hexDesertYellowMesasCave'),
+        ('Yellow Desert Salt Flat', 'hexDesertYellowSaltFlat'),
+    ]),
+    ('Water', [
+        ('Lake', 'hexLake'), ('Calm Ocean', 'hexOceanCalm'), ('Ocean', 'hexOcean'),
+        ('Rocky Island', 'hexIslandRocky'), ('Sandy Island', 'hexIslandSandy'),
+        ('Whirlpool', 'hexOceanWhirlpool'), ('Shipwreck', 'hexOceanShipWreck'),
+        ('Whaling Harbor', 'hexOceanHarborWhaling'), ('Shell Village', 'hexOceanShellVillage'),
+        ('Rocky Island Tower', 'hexIslandRockyTower'), ('Rocky Island House', 'hexIslandRockyHouse'),
+        ('Sandy Island Shipwreck', 'hexIslandSandyShipWreck'), ('Sandy Island Temple', 'hexIslandSandyTemple'),
+        ('Ice Berg Ocean', 'hexOceanIceBergs'),
+    ]),
+    ('Cold', [
+        ('Cold Dirt', 'hexDirtCold'),
+        ('Pine Forest', 'hexForestPine'), ('Pine Forest Clearing', 'hexForestPineClearing'),
+        ('Pine Forest Logging Camp', 'hexForestPineLoggingCamp'),
+        ('Snow-Covered Pine Forest', 'hexForestPineSnowCovered'), ('Snow-Covered Pine Forest Clearing', 'hexForestPineSnowCoveredClearing'),
+        ('Snow-Covered Pine Forest Logging Camp', 'hexForestPineSnowCoveredLoggingCamp'),
+        ('Pine Forest Snow Transition', 'hexForestPineSnowTransition'), ('Pine Forest Snow Transition Clearing', 'hexForestPineSnowTransitionClearing'),
+        ('Pine Forest Snow Transition Logging Camp', 'hexForestPineSnowTransitionLoggingCamp'),
+        ('Cold Hills', 'hexHillsCold'), ('Cold Hills Cave', 'hexHillsColdCave'),
+        ('Snow-Covered Cold Hills', 'hexHillsColdSnowCovered'), ('Snow-Covered Cold Hills Cave', 'hexHillsColdSnowCoveredCave'),
+        ('Cold Hills Snow Transition', 'hexHillsColdSnowTransition'), ('Cold Hills Snow Transition Cave', 'hexHillsColdSnowTransitionCave'),
+        ('Snow Mountain', 'hexMountainSnow'), ('Snow Mountain Cave', 'hexMountainSnowCave'),
+        ('Ice Berg Ocean', 'hexOceanIceBergs'),
+        ('Cold Plains', 'hexPlainsCold'), ('Cold Plains Pond', 'hexPlainsColdPond'),
+        ('Cold Plains Ruin', 'hexPlainsColdRuin'), ('Cold Plains Ruin Snow', 'hexPlainsColdRuinSnow'),
+        ('Snow-Covered Cold Plains', 'hexPlainsColdSnowCovered'), ('Snow-Covered Cold Plains Pond', 'hexPlainsColdSnowCoveredPond'),
+        ('Cold Plains Snow Transition', 'hexPlainsColdSnowTransition'), ('Cold Plains Snow Transition Pond', 'hexPlainsColdSnowTransitionPond'),
+        ('Snow Field', 'hexSnowField'), ('Snow Field Giant Skeleton', 'hexSnowFieldGiantSkeleton'),
+        ('Snow Field Ice Palace', 'hexSnowFieldIcePalace'),
+    ]),
+    ('Marsh', [
+        ('Marsh', 'hexMarsh'), ('Marsh Graveyard', 'hexMarshGraveyard'),
+        ('Marsh Stilt Village', 'hexMarshStiltVillage'), ('Marsh Snake Temple', 'hexMarshSnakeTemple'),
+        ('Marsh Ruins', 'hexMarshCastleRuins'),
+    ]),
+    ('Dirt', [
+        ('Dirt', 'hexDirt'), ('Dirt Castle', 'hexDirtCastle'),
+        ('Dirt Village', 'hexDirtVillage'), ('Dirt Small Village', 'hexDirtVillageSmall'),
+        ('Dirt Village Ruins', 'hexDirtVillageRuin'), ('Dirt Temple', 'hexDirtTemple'),
+        ('Dirt Ruins', 'hexDirtTempleRuins'), ('Dirt Inn', 'hexDirtInn'),
+        ('Dirt Smithy', 'hexDirtSmithy'), ('Dirt Walled City', 'hexDirtWalledCity'),
+        ('Dirt Henge', 'hexDirtHenge'), ('Dirt Clay Pit', 'hexDirtClayPit'),
+    ]),
+    ('Tropics', [
+        ('Bog', 'hexBog'), ('Grassy Sand', 'hexGrassySand'),
+        ('Grassy Sand Palms', 'hexGrassySandPalms'), ('Jungle', 'hexJungle'),
+        ('Tropical Sand', 'hexSand'), ('Tropical Sand Palms', 'hexSandPalms'),
+        ('Tropical Swamp', 'hexSwamp'), ('Tropical Plains', 'hexTropicalPlains'),
+        ('Tropical Plains Ruin Machine', 'hexTropicalPlainsRuinMachine'),
+        ('Tropical Plains Snake Temple', 'hexTropicalPlainsSnakeTemple'),
+        ('Tropical Plains Stepped Pyramid', 'hexTropicalPlainsSteppedPyramid'),
+        ('Tropical Plains Stepped Pyramid Ruin', 'hexTropicalPlainsSteppedPyramidRuin'),
+        ('Tropical Waterfall Hill', 'hexTropicalWaterfallHill'), ('Wetlands', 'hexWetlands'),
+        ('Wetlands Snake Temple', 'hexWetlandsSnakeTemple'), ('Wetlands Stilt Village', 'hexWetlandsStiltVillage'),
+    ]),
+    ('Wasteland', [
+        ('Ash Plains', 'hexAshPlains'), ('Burned Forest Ash', 'hexForestBurnedAsh'),
+        ('Burned Forest Dirt', 'hexForestBurnedDirt'), ('Fumarole Plains', 'hexFumarolePlains'),
+        ('Lava Field', 'hexLavaField'), ('Active Lava Field', 'hexLavaFieldActive'),
+        ('Lava Sea', 'hexLavaSea'), ('Active Volcano', 'hexVolcanoActive'),
+        ('Dormant Volcano', 'hexVolcanoDormant'), ('Volcano Cave', 'hexVolcanoCave'),
+        ('Necromancer Castle', 'hexForestBurnedAshNecroCastle'),
+    ]),
+    ('Void', [
+        ('Void', 'hexVoid'),
+    ]),
+]
+WM_GROUP_ORDER = [g for g, _ in WM_TAXONOMY]
+
+# stem -> [(group, name, ordre dans le groupe)]
+WM_LOOKUP = defaultdict(list)
+for g, items in WM_TAXONOMY:
+    for ii, (name, stem) in enumerate(items):
+        WM_LOOKUP[stem].append((g, name, ii))
+
+# socle 2.5D à dessiner sous la tuile : eau -> océan, vide -> aucun, reste -> terre
+def under_of(stem):
+    if re.search(r'Ocean|Lake|Island', stem): return 'ocean'
+    if stem.startswith('hexVoid'): return 'none'
+    return 'dirt'
 
 # ---- objets : catégorisation par mots-clés ----
 OBJ_CATS = [
@@ -104,7 +222,7 @@ for p in glob.glob(os.path.join(ROOT, '**', '*.png'), recursive=True):
     w, h = dims(p)
     files.append({'p': p.replace(os.sep,'/'), 'n': os.path.basename(p)[:-4], 'c': c, 'w': w, 'h': h})
 
-# ---- regrouper en items (variantes) par (catégorie-source, stem) ----
+# ---- regrouper en items (variantes) par stem ----
 def build_items(file_list):
     groups = defaultdict(list)
     for f in file_list:
@@ -113,39 +231,44 @@ def build_items(file_list):
     for stem, fs in groups.items():
         fs.sort(key=lambda x: x['n'])
         w, h = fs[0]['w'], fs[0]['h']
-        items.append({'id': stem, 'variants': [f['p'] for f in fs], 'w': w, 'h': h, 'sample': fs})
+        items.append({'id': stem, 'variants': [f['p'] for f in fs], 'w': w, 'h': h})
     return items
 
 # ===== TILES =====
-# base terrains = basic (hex* plein hex) + base ; composites = Locations/Tiles
-base_files_all = [f for f in files if (f['c']=='basic' and f['n'].startswith('hex') and f['w']==256 and f['h']==384) or f['c']=='base']
-composite_files_all = [f for f in files if f['c']=='composite']
+# Une tuile = full-hex 256x384 (terrains de base, "Base Tiles" et tuiles composites
+# "Tiles/"). Les petits sprites/decor restent dans les OBJETS.
+tile_files = [f for f in files if f['w'] == 256 and f['h'] == 384 and f['c'] in ('basic', 'base', 'composite')]
 
-# une tuile "à feature" (ex. hexPlainsFarm) présente côté basic doit rejoindre les composites,
-# pas la section Terrain. On route par "stem présent côté composite".
-composite_stems = set(stem_of(f['n']) for f in composite_files_all)
-base_files = [f for f in base_files_all if stem_of(f['n']) not in composite_stems]
-composite_files = composite_files_all + [f for f in base_files_all if stem_of(f['n']) in composite_stems]
+groups_map = {g: [] for g in WM_GROUP_ORDER}
+groups_map['Unknown'] = []
+unknown_stems = []
+for it in build_items(tile_files):
+    stem = it['id']
+    refs = WM_LOOKUP.get(stem)
+    under = under_of(stem)
+    base = {'id': stem, 'variants': it['variants'], 'w': it['w'], 'h': it['h'], 'under': under}
+    if refs:
+        for g, name, ii in refs:
+            entry = dict(base); entry['name'] = name; entry['_ord'] = ii
+            groups_map[g].append(entry)
+    else:
+        entry = dict(base)
+        entry['name'] = split_words(stem[3:] if stem.startswith('hex') else stem)
+        entry['_ord'] = 0
+        groups_map['Unknown'].append(entry)
+        unknown_stems.append(stem)
 
-terrain_items = []
-for it in build_items(base_files):
-    grp, tok, feat = biome_of(it['id'])
-    terrain_items.append({'id': it['id'], 'name': split_words(it['id'][3:] if it['id'].startswith('hex') else it['id']),
-                          'variants': it['variants'], 'w': it['w'], 'h': it['h'], 'biome': grp})
-terrain_items.sort(key=lambda x:(BIOME_ORDER.index(x['biome']) if x['biome'] in BIOME_ORDER else 99, x['name']))
+tiles_groups = []
+for g in WM_GROUP_ORDER + ['Unknown']:
+    lst = groups_map[g]
+    if not lst: continue
+    lst.sort(key=lambda x: (x['_ord'], x['name']))
+    for x in lst: x.pop('_ord', None)
+    tiles_groups.append({'group': g, 'items': lst})
 
-comp_by_biome = defaultdict(list)
-for it in build_items(composite_files):
-    grp, tok, feat = biome_of(it['id'])
-    name = split_words(feat) or split_words(it['id'])
-    comp_by_biome[grp].append({'id': it['id'], 'name': name, 'variants': it['variants'],
-                               'w': it['w'], 'h': it['h']})
-
-tiles_groups = [{'group':'Terrain', 'items': terrain_items}]
-for b in BIOME_ORDER:
-    if comp_by_biome.get(b):
-        items = sorted(comp_by_biome[b], key=lambda x:x['name'])
-        tiles_groups.append({'group': b, 'items': items})
+# stems de la taxonomie sans asset correspondant (pour info)
+have = set(stem_of(f['n']) for f in tile_files)
+missing = sorted({s for s in WM_LOOKUP if s not in have})
 
 # ===== OBJECTS =====
 # props = decor + basic non-hex (petits sprites)
@@ -172,8 +295,9 @@ with open('catalog.js','w',encoding='utf-8') as fh:
 # ---- résumé ----
 print('TILES groups:')
 for g in tiles_groups: print('  ', g['group'], '->', len(g['items']), 'items')
+print('  -> tuiles non reconnues (Unknown):', sorted(set(unknown_stems)))
+print('  -> tuiles de la taxonomie sans asset (', len(missing), '):', missing)
 print('OBJECTS groups:')
 for g in objects_groups: print('  ', g['group'], '->', len(g['items']), 'items')
 print('roads/rivers raw files:', len(roads_files))
-print('exemple noms roads:', [os.path.basename(x)[:-4] for x in roads_files[:12]])
 print('taille catalog.js ~', round(os.path.getsize('catalog.js')/1024), 'Ko')

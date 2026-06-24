@@ -13,8 +13,8 @@
         --muted: #8b94a3;
         --accent: #c9a24b;
         --border: #2a323d;
-        --wm-gradient-inner: #232c39;
-        --wm-gradient-outer: #0b0e12;
+        --wm-gradient-inner: #33404f;
+        --wm-gradient-outer: #232b35;
       }
       * {
         box-sizing: border-box;
@@ -37,31 +37,7 @@
         flex: 1;
         position: relative;
         overflow: auto;
-        background-color: var(--wm-gradient-outer);
-        background-image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDI0IiBoZWlnaHQ9IjEwMjQiPjxkZWZzPjxmaWx0ZXIgaWQ9ImEiIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgeD0iMCIgeT0iMCIgd2lkdGg9IjEwMjQiIGhlaWdodD0iMTAyNCI+PGZlVHVyYnVsZW5jZSB0eXBlPSJmcmFjdGFsTm9pc2UiIGJhc2VGcmVxdWVuY3k9Ii4wMDIiIHNlZWQ9IjIiIHN0aXRjaFRpbGVzPSJzdGl0Y2giLz48L2ZpbHRlcj48ZmlsdGVyIGlkPSJiIiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIHg9IjAiIHk9IjAiIHdpZHRoPSIxMDI0IiBoZWlnaHQ9IjEwMjQiPjxmZVR1cmJ1bGVuY2UgdHlwZT0iZnJhY3RhbE5vaXNlIiBiYXNlRnJlcXVlbmN5PSIuMDMiIG51bU9jdGF2ZXM9IjMiIHNlZWQ9IjMiIHN0aXRjaFRpbGVzPSJzdGl0Y2giLz48L2ZpbHRlcj48ZmlsdGVyIGlkPSJjIiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIHg9IjAiIHk9IjAiIHdpZHRoPSIxMDI0IiBoZWlnaHQ9IjEwMjQiPjxmZVR1cmJ1bGVuY2UgdHlwZT0iZnJhY3RhbE5vaXNlIiBiYXNlRnJlcXVlbmN5PSIuMDEiIG51bU9jdGF2ZXM9IjMiIHNlZWQ9IjQiIHN0aXRjaFRpbGVzPSJzdGl0Y2giLz48L2ZpbHRlcj48ZmlsdGVyIGlkPSJkIiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIHg9IjAiIHk9IjAiIHdpZHRoPSIxMDI0IiBoZWlnaHQ9IjEwMjQiPjxmZVR1cmJ1bGVuY2UgdHlwZT0iZnJhY3RhbE5vaXNlIiBiYXNlRnJlcXVlbmN5PSIuNSIgbnVtT2N0YXZlcz0iNSIgc3RpdGNoVGlsZXM9InN0aXRjaCIvPjwvZmlsdGVyPjwvZGVmcz48cGF0aCBmaWx0ZXI9InVybCgjYSkiIG9wYWNpdHk9Ii4zIiBkPSJNMCAwaDEwMjR2MTAyNEgweiIvPjxwYXRoIGZpbHRlcj0idXJsKCNiKSIgb3BhY2l0eT0iLjEiIGQ9Ik0wIDBoMTAyNHYxMDI0SDB6Ii8+PHBhdGggZmlsdGVyPSJ1cmwoI2MpIiBvcGFjaXR5PSIuMiIgZD0iTTAgMGgxMDI0djEwMjRIMHoiLz48cGF0aCBmaWx0ZXI9InVybCgjZCkiIG9wYWNpdHk9Ii4zIiBkPSJNMCAwaDEwMjR2MTAyNEgweiIvPjwvc3ZnPgo=),
-          radial-gradient(
-            closest-side,
-            var(--wm-gradient-inner),
-            var(--wm-gradient-outer)
-          );
-        background-repeat: repeat, no-repeat;
-        background-position:
-          0 0,
-          50% -50vw;
-        background-size:
-          1024px 1024px,
-          150vw 150vw;
-        background-blend-mode: overlay, normal;
-      }
-      @media (min-width: 1200px) {
-        .stage {
-          background-position:
-            0 0,
-            50% -600px;
-          background-size:
-            1024px 1024px,
-            1800px 1800px;
-        }
+        background-color: #2b3440;
       }
       #svgWrap {
         display: inline-block;
@@ -702,13 +678,33 @@
         return { it, path: it.variants[Math.min(o.v, it.variants.length - 1)] };
       }
 
+      /* ---- socle 2.5D sous les tuiles (Under Dirt / Under Ocean) ---- */
+      const UNDER_DY = 316, // décalage vertical : pose le chevron du socle sur le V bas de l'hex
+        UNDER_W = 256,
+        UNDER_H = 192;
+      // chemins en dur : ces tuiles (256x192) ne sont pas dans le catalogue placeable
+      const UNDER_BASE =
+        "assets/tiles/Hex Medieval-Fantasy Locations v1.3.4 - done/Assets/Hex Medieval Fantasy Locations/Base Tiles/";
+      const UNDER_DIRT = UNDER_BASE + "hexUnderDirt00.png",
+        UNDER_OCEAN = UNDER_BASE + "hexUnderOcean00.png";
+      // socle adapté à la tuile via son champ "under" (ocean | dirt | none), fixé par build_catalog
+      function underFor(terrain) {
+        const it = TILES_BY_ID.get(terrain.id);
+        if (!it || it.under === "none") return null;
+        return it.under === "ocean" ? UNDER_OCEAN : UNDER_DIRT;
+      }
+
       function cellInner(c) {
         if (!c) return "";
         let s = "";
         if (c.terrain) {
           const p = terrainPath(c.terrain);
-          if (p)
+          if (p) {
+            const u = underFor(c.terrain);
+            if (u)
+              s += `<image href="${url(u)}" x="${c._tx}" y="${c._ty + UNDER_DY}" width="${UNDER_W}" height="${UNDER_H}"/>`;
             s += `<image href="${url(p)}" x="${c._tx}" y="${c._ty}" width="${TILE_W}" height="${TILE_H}"/>`;
+          }
         }
         for (const o of c.objects) {
           const r = objItemVar(o);
@@ -1486,7 +1482,19 @@
             const t = tileXY(col, row);
             if (c.terrain) {
               const p = terrainPath(c.terrain);
-              if (p)
+              if (p) {
+                // socle 2.5D derrière la tuile (pas en export Foundry : casserait la grille top-down)
+                if (!foundry) {
+                  const u = underFor(c.terrain);
+                  if (u)
+                    draws.push({
+                      src: u,
+                      x: t.x,
+                      y: t.y + UNDER_DY,
+                      w: UNDER_W,
+                      h: UNDER_H,
+                    });
+                }
                 draws.push({
                   src: p,
                   x: t.x,
@@ -1495,6 +1503,7 @@
                   h: TILE_H,
                   hex: true,
                 });
+              }
             }
             for (const o of c.objects) {
               const r = objItemVar(o);
