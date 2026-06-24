@@ -49,7 +49,7 @@ WM_TAXONOMY = [
         ('Scrublands', 'hexScrublands'), ('Woodlands', 'hexWoodlands'),
     ]),
     ('Plains', [
-        ('Plains', 'hexPlains'), ('Castle', 'hexPlainsCastle'),
+        ('Plains', 'hexPlains'), ('Castle', 'hexPlainsCastle'), ('Fortified Castle', 'hexPlainsCastleFortified'),
         ('Village', 'hexPlainsVillage'), ('Small Village', 'hexPlainsVillageSmall'),
         ('Thatched Village', 'hexPlainsVillageThatched'), ('Wooden Village', 'hexPlainsVillageWood'),
         ('Village Ruins', 'hexPlainsVillageRuin'), ('Farm', 'hexPlainsFarm'),
@@ -59,8 +59,11 @@ WM_TAXONOMY = [
         ('Cookhouse', 'hexPlainsCookhouse'), ('Inn', 'hexPlainsInn'),
         ('Marketplace', 'hexPlainsMarketplace'), ('Scriptorium', 'hexPlainsScriptorium'),
         ('Smithy', 'hexPlainsSmithy'), ('Warehouse', 'hexPlainsWarehouse'),
-        ('Windmill', 'hexPlainsWindmill'), ('Barn', 'hexPlainsFarmBarn'),
-        ('Silo', 'hexPlainsFarmSilo'), ('Stronghold', 'hexPlainsStrongholdThatched'),
+        ('Windmill', 'hexPlainsWindmill'),
+        ('Barn', 'hexPlainsFarmBarn'), ('Thatched Barn', 'hexPlainsFarmBarnThatched'), ('Wooden Barn', 'hexPlainsFarmBarnWood'),
+        ('Silo', 'hexPlainsFarmSilo'), ('Thatched Silo', 'hexPlainsFarmSiloThatched'), ('Wooden Silo', 'hexPlainsFarmSiloWood'),
+        ('Stronghold', 'hexPlainsStrongholdThatched'), ('Dark Wood Stronghold', 'hexPlainsStrongholdDarkWood'),
+        ('Staked Stronghold', 'hexPlainsStrongholdStakes'), ('Wooden Stronghold', 'hexPlainsStrongholdWood'),
         ('Halfling Village', 'hexPlainsHalflingVillage'), ('Elven Lodge', 'hexPlainsElvenLodge'),
         ('Henge', 'hexPlainsHenge'),
     ]),
@@ -75,14 +78,19 @@ WM_TAXONOMY = [
     ]),
     ('Mountain', [
         ('Mountains', 'hexMountain'), ('Mountain Mine', 'hexMountainMine'),
-        ('Mountain Cave', 'hexMountainCave'), ('Mountain Fortress', 'hexMountainFortress'),
-        ('Dwarf Fortress', 'hexMountainDwarfFortress'), ('Underground Gates', 'hexMountainUndergroundGateArch'),
+        ('Mountain Cave', 'hexMountainCave'), ('Mountain Castle', 'hexMountainCastle'),
+        ('Mountain Fortress', 'hexMountainFortress'), ('Dwarf Fortress', 'hexMountainDwarfFortress'),
+        ('Underground Gates', 'hexMountainUndergroundGateArch'),
+        ('Underground Gate (Closed)', 'hexMountainUndergroundGateClosed'),
+        ('Underground Gate (Natural)', 'hexMountainUndergroundGateNatural'),
+        ('Underground Gate (Open)', 'hexMountainUndergroundGateOpen'),
         ('Mountains River', 'hexMountain00-river000010'), ('Highlands', 'hexHighlands'),
     ]),
     ('Hills', [
         ('Hills', 'hexHills'), ('Hills Mine', 'hexHillsMine'),
         ('Barrow Downs', 'hexHillsBarrowDowns'), ('Ruined Wizard Tower', 'hexHillsWizardTowerRuin'),
         ('Wizard Tower', 'hexHillsWizardTower'),
+        ('Dark Wizard Tower', 'hexHillsWizardTowerDark'), ('Dark Wizard Tower B', 'hexHillsWizardTowerDarkB'),
     ]),
     ('Desert', [
         ('Desert', 'hexDesertDunes'), ('Desert Oasis', 'hexDesertDunesOasis'),
@@ -138,7 +146,7 @@ WM_TAXONOMY = [
         ('Marsh Ruins', 'hexMarshCastleRuins'),
     ]),
     ('Dirt', [
-        ('Dirt', 'hexDirt'), ('Dirt Castle', 'hexDirtCastle'),
+        ('Dirt', 'hexDirt'), ('Dirt Castle', 'hexDirtCastle'), ('Dirt Castle Ruins', 'hexDirtCastleRuins'),
         ('Dirt Village', 'hexDirtVillage'), ('Dirt Small Village', 'hexDirtVillageSmall'),
         ('Dirt Village Ruins', 'hexDirtVillageRuin'), ('Dirt Temple', 'hexDirtTemple'),
         ('Dirt Ruins', 'hexDirtTempleRuins'), ('Dirt Inn', 'hexDirtInn'),
@@ -171,6 +179,9 @@ WM_TAXONOMY = [
 ]
 WM_GROUP_ORDER = [g for g, _ in WM_TAXONOMY]
 
+# tuiles masquées dans la palette (présentes dans les assets mais non affichées)
+HIDDEN_STEMS = {'hexBase'}
+
 # stem -> [(group, name, ordre dans le groupe)]
 WM_LOOKUP = defaultdict(list)
 for g, items in WM_TAXONOMY:
@@ -183,36 +194,110 @@ def under_of(stem):
     if stem.startswith('hexVoid'): return 'none'
     return 'dirt'
 
-# ---- objets : catégorisation par mots-clés ----
-OBJ_CATS = [
-    ('Nature', ['tree','trees','bush','shrub','mushroom','cloud','mist','rock','rocks','outcrop',
-                'boulder','decormountain','pond','lake','oasis','iceberg','palm','cactus','crystal',
-                'waterfall','flower','redrock','lavarocks','spring']),
-    ('Bâtiments', ['house','hut','cabin','lodge','cottage','tower','church','temple','chapel','shrine',
-                   'inn','smithy','barracks','fortress','keep','manor','mansion','dwarf','elven','elf',
-                   'halfling','yurt','longhouse','tent','scriptorium','adobe','round','thatched','wood',
-                   'necro','stronghold','wizard']),
-    ('Peuplements', ['village','town','city','hamlet','walledcity','settlement']),
-    ('Industrie', ['mill','windmill','mine','mines','quarry','claypit','logging','warehouse','kiln',
-                   'forge','slavers','toll','cattle','caravanserai','clay']),
-    ('Agriculture', ['farm','field','barn','granary','haystack','silo','corral','pasture','pen',
-                     'chicken','flock','herd','crop','swidden','orchard','scarecrow','straw','cookhouse',
-                     'well','cows','pigs','sheep','meadow','felled']),
-    ('Militaire', ['archery','battlefield','checkpoint','prisoner','trench','warmonument','statue',
-                   'banditcamp','bandit','tourney','ambush','massgrave','war']),
-    ('Mystère & Ruines', ['ruin','ruins','barrow','tomb','graveyard','cemetery','dolmen','standing',
-                          'henge','obelisk','idol','totem','calvary','cross','vault','desecrated',
-                          'gallows','bones','skull','sphinx','pyramid','ziggurat','masks']),
-    ('Voyage', ['bridge','sign','boardwalk','stairs','zipline','boundary','ledge','road','path']),
-    ('Magie', ['portal','teleport','magic','mana','beacon','rune','altar','circle']),
+# ============================================================================
+# Taxonomie de référence des OBJETS (westmarches.games). 13 groupes ordonnés,
+# transcrits du HTML du site : (nom affiché, stem du fichier). Un même stem peut
+# apparaître dans plusieurs groupes (ex. loggingCamp en Industry ET Cold). Les
+# stems sans asset local sont ignorés ; les objets locaux non mappés -> "Unknown".
+# ============================================================================
+WM_OBJ_TAXONOMY = [
+    ('Nature', [
+        ('Tree', 'treeA'), ('Tree B', 'treeB'), ('Tree C', 'treeC'),
+        ('Tree Cluster', 'decorTreeCluster'), ('Trees Cluster', 'treesA_cluster'), ('Trees Line', 'treesA_line'),
+        ('Fog', 'fog'), ('Forester Stumps', 'foresterStumps'), ('Mountain', 'decorMountain'),
+        ('Pond', 'decorPond'), ('Small Lake', 'lakeSmall'),
+        ('Rock Outcrop', 'outcrop'), ('Rocks', 'rocks'), ('Grass', 'grass'),
+    ]),
+    ('Buildings', [
+        ('Forester Hut', 'foresterHut'), ('Forester Shed', 'foresterShed'),
+        ('Halfling House', 'halflingHouse'), ('House', 'house'), ('Adobe House', 'houseAdobe'),
+        ('Longhouse', 'houseLonghouse'), ('Round Hut', 'houseRoundHut'),
+        ('Thatched House', 'houseThatched'), ('Wooden House', 'houseWood'), ('Yurt', 'houseYurt'),
+        ('Barn', 'barn'), ('Wooden Barn', 'barnWood'), ('Castle', 'castle'), ('Church', 'church'),
+        ('Cookhouse', 'cookhouse'), ('Dwarf Fortress', 'dwarfFortress'), ('Elven Lodge', 'elvenLodge'),
+        ('Farm', 'farm'), ('Granary', 'granary'), ('Inn', 'inn'), ('Marketplace', 'marketplace'),
+        ('Mountain Castle', 'mountainCastle'), ('Mountain Fortress', 'mountainFortress'),
+        ('Necro Castle', 'necroCastle'), ('Scriptorium', 'scriptorium'), ('Smithy', 'smithy'),
+        ('Stronghold', 'strongholdDarkWood'), ('Staked Stronghold', 'strongholdStakes'),
+        ('Thatched Stronghold', 'strongholdThatched'), ('Wooden Stronghold', 'strongholdWood'),
+        ('Temple', 'temple'), ('Tent', 'tent'),
+        ('Warehouse', 'warehouse'), ('Windmill', 'windmill'), ('Windmill & Fields', 'windmillFields'),
+        ('Wizard Tower', 'wizardTower'), ('Dark Wizard Tower', 'wizardTowerDark'), ('Dark Wizard Tower B', 'wizardTowerDark00B'),
+        ('Fortified Castle', 'castleFortified'), ('Mossy Inn', 'innMossy'),
+        ('Barracks', 'barracks'), ("Alchemist's Lab", 'alchemistsLab'),
+        ('Archery Range', 'archeryRange'), ('Bandit Camp', 'banditCamp'), ('Barrels', 'barrels'),
+    ]),
+    ('Settlements', [
+        ('Halfling Village', 'halflingVillage'), ('Village', 'village'), ('Small Village', 'villageSmall'),
+        ('Thatched Village', 'villageThatched'), ('Wooden Village', 'villageWood'), ('Walled City', 'walledCity'),
+        ('Halfling Village Decor', 'villageHalflingDecor'), ('Mossy Walled City', 'walledCityMossy'),
+    ]),
+    ('Industry', [
+        ('Mine', 'mines'), ('Clay Pit', 'clayPit'), ('Logging Camp', 'loggingCamp'), ('Mine Entrance', 'mine'),
+    ]),
+    ('Agriculture', [
+        ('Chicken Coop', 'chickenCoop'), ('Corral', 'corral'), ('Field', 'field'),
+        ('Flock of Chickens', 'flockChickens'), ('Flock of Sheep', 'flockSheep'), ('Haystack', 'haystack'),
+        ('Herd of Cows', 'herdCows'), ('Herd of Pigs', 'herdPigs'), ('Pasture', 'pasture'),
+        ('Pig Pen', 'pen'), ('Pig Well', 'wellPig'),
+        ('Barn', 'farmBarn'), ('Silo', 'farmSilo'), ('Stone Granary', 'granaryStone'),
+        ('Thatched Granary', 'granaryThatched'), ('Wooden Granary A', 'granaryWoodA'),
+        ('Wooden Granary B', 'granaryWoodB'), ('Wooden Granary C', 'granaryWoodC'),
+    ]),
+    ('Landmarks', [
+        ('Barrow', 'barrow'), ('Fountain', 'fountain'), ('Graveyard', 'graveyard'), ('Signpost', 'sign'),
+        ('Standing Stones', 'standingStones'), ('Mossy Standing Stones', 'standingStonesMossy'),
+        ('Underground Passage', 'undergroundPassage'),
+        ('Underground Passage (Closed)', 'undergroundPassageClosed'),
+        ('Underground Passage (Open)', 'undergroundPassageOpen'),
+        ('Volcano Cave', 'volcanoCave'), ('Well', 'well'),
+    ]),
+    ('Arcane', [
+        ('Teleport Machine', 'teleportMachine'), ('Teleportation Circle', 'teleportationCircle'),
+    ]),
+    ('Ruins', [
+        ('Castle Ruins', 'castleRuinDirt'), ('Forest Castle Ruins', 'castleRuinForest'),
+        ('Marsh Castle Ruins', 'castleRuinMarsh'), ('Temple Ruins', 'templeRuins'),
+        ('Village Ruins', 'villageRuin'), ('Wizard Tower Ruins', 'wizardTowerRuins'),
+    ]),
+    ('Water', [
+        ('Bridge', 'bridgeEW'), ('Canoe', 'canou'), ('Dock', 'dockE'), ('Rocky Island', 'islandRocky'),
+        ('Sandy Island', 'islandSandy'), ('Shell Building', 'shellBuilding'), ('Ship', 'ship'),
+        ('Shipwreck', 'shipWreck'), ('Whirlpool', 'whirlpool'),
+    ]),
+    ('Cold', [
+        ('Cave', 'coldLandCave'), ('Snow Cave', 'coldLandCaveSnow'), ('Frozen Giant Skeleton', 'giantSkeletonFrozen'),
+        ('Iceberg', 'iceBerg'), ('Ice Crevasse', 'iceCrevasse'), ('Cold Lake', 'lakeCold'),
+        ('Frozen Lake', 'lakeColdFrozen'), ('Logging Camp', 'loggingCamp'), ('Snow Logging Camp', 'loggingCampSnow'),
+        ('Snow Mountain', 'mountainSnow'), ('Snow Mountain Decor', 'decorMountainSnow'),
+        ('Pine Tree', 'treePine'), ('Snow Pine Tree', 'treePineSnow'),
+    ]),
+    ('Desert', [
+        ('Obelisk', 'obelisk'), ('Desert Ruins', 'desertRuins'), ('Oasis', 'oasis'), ('Pyramid', 'pyramid'),
+        ('Small Pyramid', 'pyramidSmall'), ('Sphinx', 'sphinx'), ('Cactus', 'cactus'), ('Cow Skull', 'cowSkull'),
+        ('Desert Oasis', 'desertOasis'), ('Desert Tree', 'desertTree'), ('Desert Shrub', 'desertShrub'),
+        ('Red Rock Formation', 'redRockBig'), ('Red Rock', 'redRock'),
+        ('Yellow Rock Formation', 'yellowRockBig'),
+    ]),
+    ('Tropics', [
+        ('Jungle Palm', 'junglePalm'), ('Jungle Tree', 'jungleTree'), ('Palm Tree', 'palm'),
+        ('Stilt House', 'stiltHouse'), ('Swamp Tree', 'swampTree'),
+    ]),
+    ('Wastelands', [
+        ('Burned Tree', 'burnedTree'), ('Hellgate', 'hellgate'), ('Lava Crater', 'lavaCraterBig'),
+        ('Lava Outcrop', 'lavaOutcrop'), ('Dormant Lava Cone', 'lavaConeDormant'), ('Lava Rocks', 'lavaRocks'),
+    ]),
 ]
-def obj_cat(name):
-    n = name.lower()
-    for cat, kws in OBJ_CATS:
-        for kw in kws:
-            if kw in n:
-                return cat
-    return 'Divers'
+WM_OBJ_GROUP_ORDER = [g for g, _ in WM_OBJ_TAXONOMY]
+
+# objets masqués : doublons snake_case identiques aux versions camelCase déjà mappées
+OBJ_HIDDEN_STEMS = {'forester_hut', 'forester_shed', 'forester_stumps', 'halfling_village'}
+
+# stem -> [(group, name, ordre dans le groupe)]
+WM_OBJ_LOOKUP = defaultdict(list)
+for g, items in WM_OBJ_TAXONOMY:
+    for ii, (name, stem) in enumerate(items):
+        WM_OBJ_LOOKUP[stem].append((g, name, ii))
 
 # ============ scan ============
 files = []
@@ -244,6 +329,7 @@ groups_map['Unknown'] = []
 unknown_stems = []
 for it in build_items(tile_files):
     stem = it['id']
+    if stem in HIDDEN_STEMS: continue
     refs = WM_LOOKUP.get(stem)
     under = under_of(stem)
     base = {'id': stem, 'variants': it['variants'], 'w': it['w'], 'h': it['h'], 'under': under}
@@ -271,19 +357,36 @@ have = set(stem_of(f['n']) for f in tile_files)
 missing = sorted({s for s in WM_LOOKUP if s not in have})
 
 # ===== OBJECTS =====
-# props = decor + basic non-hex (petits sprites)
+# props = decor + basic non-hex (petits sprites). Regroupés d'après WM_OBJ_TAXONOMY.
 obj_files = [f for f in files if f['c']=='decor' or (f['c']=='basic' and not f['n'].startswith('hex'))]
-obj_by_cat = defaultdict(list)
+obj_groups_map = {g: [] for g in WM_OBJ_GROUP_ORDER}
+obj_groups_map['Unknown'] = []
+obj_unknown_stems = []
 for it in build_items(obj_files):
-    cat = obj_cat(it['id'])
-    obj_by_cat[cat].append({'id': it['id'], 'name': split_words(it['id']), 'variants': it['variants'],
-                            'w': it['w'], 'h': it['h']})
-OBJ_ORDER = ['Nature','Bâtiments','Peuplements','Industrie','Agriculture','Militaire',
-             'Mystère & Ruines','Voyage','Magie','Divers']
+    stem = it['id']
+    if stem in OBJ_HIDDEN_STEMS: continue
+    refs = WM_OBJ_LOOKUP.get(stem)
+    base = {'id': stem, 'variants': it['variants'], 'w': it['w'], 'h': it['h']}
+    if refs:
+        for g, name, ii in refs:
+            entry = dict(base); entry['name'] = name; entry['_ord'] = ii
+            obj_groups_map[g].append(entry)
+    else:
+        entry = dict(base); entry['name'] = split_words(stem); entry['_ord'] = 0
+        obj_groups_map['Unknown'].append(entry)
+        obj_unknown_stems.append(stem)
+
 objects_groups = []
-for c in OBJ_ORDER:
-    if obj_by_cat.get(c):
-        objects_groups.append({'group': c, 'items': sorted(obj_by_cat[c], key=lambda x:x['name'])})
+for g in WM_OBJ_GROUP_ORDER + ['Unknown']:
+    lst = obj_groups_map[g]
+    if not lst: continue
+    lst.sort(key=lambda x: (x['_ord'], x['name']))
+    for x in lst: x.pop('_ord', None)
+    objects_groups.append({'group': g, 'items': lst})
+
+# stems de la taxonomie objets sans asset correspondant (pour info)
+obj_have = set(stem_of(f['n']) for f in obj_files)
+obj_missing = sorted({s for s in WM_OBJ_LOOKUP if s not in obj_have})
 
 # ===== ROADS / RIVERS (brut, pour plus tard) =====
 roads_files = sorted([f['p'] for f in files if f['c']=='roads'])
@@ -299,5 +402,7 @@ print('  -> tuiles non reconnues (Unknown):', sorted(set(unknown_stems)))
 print('  -> tuiles de la taxonomie sans asset (', len(missing), '):', missing)
 print('OBJECTS groups:')
 for g in objects_groups: print('  ', g['group'], '->', len(g['items']), 'items')
+print('  -> objets non reconnus (Unknown):', sorted(set(obj_unknown_stems)))
+print('  -> objets de la taxonomie sans asset (', len(obj_missing), '):', obj_missing)
 print('roads/rivers raw files:', len(roads_files))
 print('taille catalog.js ~', round(os.path.getsize('catalog.js')/1024), 'Ko')
