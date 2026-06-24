@@ -413,6 +413,8 @@
       </aside>
     </div>
 
+    <!-- manifeste nom de fichier -> chemin (genere par build_catalog.py) -->
+    <script src="tilepaths.js"></script>
     <script>
       "use strict";
       /* =========================================================================
@@ -871,12 +873,12 @@
         "abbey",
       ]; // d6 1..6
 
-      // Manifeste des tuiles (miroir de tiles.json). Terrain = pack Basic ; lieux = pack Locations.
+      // Manifeste des tuiles (miroir de tiles.json). Les chemins reels sont resolus
+      // via tilepaths.js (manifeste nom -> chemin) ; terrainDir/decorDir ne sont plus
+      // qu'un fallback vers l'arbo map-builder.
       const TILES = {
-        terrainDir:
-          "assets/tiles/Hex Basic Set Painted 2D Terrain v1.3.0 extracted/",
-        decorDir:
-          "assets/tiles/Hex Medieval-Fantasy Locations v1.3.4 - done/Assets/Hex Medieval Fantasy Locations/Decor/",
+        terrainDir: "assets/tiles/terrain-base/",
+        decorDir: "assets/tiles/objects-locations/",
         biomes: {
           Prairie: ["hexPlains00", "hexPlains01", "hexPlains02", "hexPlains03"],
           Forêt: [
@@ -1005,6 +1007,11 @@
         },
       };
       function tileURL(kind, name) {
+        // Resolution via le manifeste genere (tilepaths.js) : nom de fichier -> chemin.
+        // Les assets ne sont plus 2 dossiers plats mais l'arbo map-builder (terrain-*/objects-*).
+        const p = window.TILE_PATHS && window.TILE_PATHS[name];
+        if (p) return encodeURI(p);
+        // fallback (ancien schema, ne devrait plus servir)
         return encodeURI(
           (kind === "t" ? TILES.terrainDir : TILES.decorDir) + name + ".png",
         );

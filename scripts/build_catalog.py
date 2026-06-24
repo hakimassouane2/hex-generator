@@ -10,12 +10,13 @@ from PIL import Image
 ROOT = 'assets/tiles'
 
 def cat_of(p):
+    # nouvelle arbo map-builder : sous-dossiers terrain-* / objects-* / roads / under-tiles
+    # (+ terrain-legacy / objects-legacy pour les orphelines des anciens packs).
     pl = p.replace(os.sep, '/')
-    if 'Hex Basic Set' in pl: return 'basic'
-    if '/Decor/' in pl: return 'decor'
-    if '/Tiles/' in pl: return 'composite'
-    if '/Base Tiles/' in pl: return 'base'
-    if '/Roads/' in pl: return 'roads'
+    if '/roads/' in pl: return 'roads'
+    if '/under-tiles/' in pl: return 'under'
+    if '/objects-' in pl: return 'object'       # objects-* et objects-legacy
+    if '/terrain-' in pl: return 'tile'         # terrain-* et terrain-legacy
     return None
 
 def dims(p):
@@ -322,7 +323,7 @@ def build_items(file_list):
 # ===== TILES =====
 # Une tuile = full-hex 256x384 (terrains de base, "Base Tiles" et tuiles composites
 # "Tiles/"). Les petits sprites/decor restent dans les OBJETS.
-tile_files = [f for f in files if f['w'] == 256 and f['h'] == 384 and f['c'] in ('basic', 'base', 'composite')]
+tile_files = [f for f in files if f['w'] == 256 and f['h'] == 384 and f['c'] == 'tile']
 
 groups_map = {g: [] for g in WM_GROUP_ORDER}
 groups_map['Unknown'] = []
@@ -358,7 +359,7 @@ missing = sorted({s for s in WM_LOOKUP if s not in have})
 
 # ===== OBJECTS =====
 # props = decor + basic non-hex (petits sprites). Regroupés d'après WM_OBJ_TAXONOMY.
-obj_files = [f for f in files if f['c']=='decor' or (f['c']=='basic' and not f['n'].startswith('hex'))]
+obj_files = [f for f in files if f['c']=='object']
 obj_groups_map = {g: [] for g in WM_OBJ_GROUP_ORDER}
 obj_groups_map['Unknown'] = []
 obj_unknown_stems = []
@@ -395,6 +396,22 @@ catalog = {'tiles': tiles_groups, 'objects': objects_groups, 'roads_raw': roads_
 with open('catalog.js','w',encoding='utf-8') as fh:
     fh.write('window.CATALOG=' + json.dumps(catalog, ensure_ascii=False) + ';')
 
+# ===== MANIFESTE nom -> chemin (pour index.html) =====
+# index.html ne reconstruit plus les chemins via 2 dossiers plats (terrainDir/decorDir) :
+# il resout chaque nom de fichier via ce manifeste. En cas de doublon de basename
+# (ex. loggingCamp00 en cold ET locations), on garde le 1er par ordre alpha de chemin.
+manifest = {}
+manifest_collisions = {}
+for f in sorted(files, key=lambda x: x['p']):
+    n = f['n']
+    if n in manifest:
+        if manifest[n] != f['p']:
+            manifest_collisions.setdefault(n, [manifest[n]]).append(f['p'])
+        continue
+    manifest[n] = f['p']
+with open('tilepaths.js','w',encoding='utf-8') as fh:
+    fh.write('window.TILE_PATHS=' + json.dumps(manifest, ensure_ascii=False) + ';')
+
 # ---- résumé ----
 print('TILES groups:')
 for g in tiles_groups: print('  ', g['group'], '->', len(g['items']), 'items')
@@ -405,4 +422,7 @@ for g in objects_groups: print('  ', g['group'], '->', len(g['items']), 'items')
 print('  -> objets non reconnus (Unknown):', sorted(set(obj_unknown_stems)))
 print('  -> objets de la taxonomie sans asset (', len(obj_missing), '):', obj_missing)
 print('roads/rivers raw files:', len(roads_files))
+print('manifeste tilepaths.js:', len(manifest), 'noms ;', len(manifest_collisions), 'collisions de basename')
+if manifest_collisions:
+    print('  -> collisions (1er chemin garde):', sorted(manifest_collisions))
 print('taille catalog.js ~', round(os.path.getsize('catalog.js')/1024), 'Ko')
