@@ -38,6 +38,11 @@
         position: relative;
         overflow: auto;
         background-color: #2b3440;
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE/Edge */
+      }
+      .stage::-webkit-scrollbar {
+        display: none; /* Chrome/Safari */
       }
       #svgWrap {
         display: inline-block;
@@ -451,6 +456,45 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+      }
+      /* popover d'aperçu des variantes au hover */
+      .vpop {
+        position: fixed;
+        z-index: 60;
+        display: none;
+        padding: 10px;
+        background: var(--panel2);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 10px 30px #000a;
+        pointer-events: none; /* ne vole pas le hover de la card */
+      }
+      .vpop.show {
+        display: block;
+      }
+      .vpop .vgrid {
+        display: grid;
+        grid-template-columns: repeat(4, 44px);
+        gap: 8px;
+      }
+      .vpop .vgrid img,
+      .vpop .vmore {
+        width: 44px;
+        height: 44px;
+        border-radius: 8px;
+        background: #0004;
+      }
+      .vpop .vgrid img {
+        object-fit: contain;
+      }
+      .vpop .vmore {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 600;
       }
       .toast {
         position: fixed;
@@ -1072,6 +1116,31 @@
 
       /* =================== CATALOGUE (MODALE) =================== */
       let catalogMode = "tiles";
+
+      /* --- popover d'aperçu des variantes (singleton) --- */
+      const vpop = document.createElement("div");
+      vpop.className = "vpop";
+      document.body.appendChild(vpop);
+      const VPOP_MAX = 7;
+      function showVpop(card, it) {
+        const shown = it.variants.slice(0, VPOP_MAX);
+        const extra = it.variants.length - shown.length;
+        vpop.innerHTML =
+          `<div class="vgrid">` +
+          shown.map((v) => `<img src="${url(v)}">`).join("") +
+          (extra > 0 ? `<div class="vmore">+${extra}</div>` : "") +
+          `</div>`;
+        vpop.classList.add("show");
+        const cr = card.getBoundingClientRect(),
+          pr = vpop.getBoundingClientRect();
+        let left = cr.left + cr.width / 2 - pr.width / 2;
+        left = Math.max(8, Math.min(left, innerWidth - pr.width - 8));
+        let top = cr.bottom + 8; // sous la card par défaut
+        if (top + pr.height > innerHeight - 8) top = cr.top - pr.height - 8; // sinon au-dessus
+        vpop.style.left = left + "px";
+        vpop.style.top = top + "px";
+      }
+      const hideVpop = () => vpop.classList.remove("show");
       function openCatalog(mode) {
         catalogMode = mode;
         document.getElementById("modalTitle").textContent =
@@ -1091,9 +1160,10 @@
         for (const g of groups) {
           const items = g.items.filter(
             (it) =>
-              !q ||
-              it.name.toLowerCase().includes(q) ||
-              it.id.toLowerCase().includes(q),
+              !it.hidden &&
+              (!q ||
+                it.name.toLowerCase().includes(q) ||
+                it.id.toLowerCase().includes(q)),
           );
           if (!items.length) continue;
           html += `<div class="mgroup"><h3>${g.group}</h3><div class="cards">`;
@@ -1108,9 +1178,16 @@
         const body = document.getElementById("modalBody");
         body.innerHTML =
           html || '<p style="color:var(--muted)">Aucun résultat.</p>';
-        body
-          .querySelectorAll(".card")
-          .forEach((el) => (el.onclick = () => pickFromCatalog(el.dataset.id)));
+        const byId = catalogMode === "tiles" ? TILES_BY_ID : OBJ_BY_ID;
+        body.querySelectorAll(".card").forEach((el) => {
+          el.onclick = () => pickFromCatalog(el.dataset.id);
+          const it = byId.get(el.dataset.id);
+          if (it && it.variants.length > 1) {
+            el.addEventListener("mouseenter", () => showVpop(el, it));
+            el.addEventListener("mouseleave", hideVpop);
+          }
+        });
+        body.onscroll = hideVpop; // évite un popover figé pendant le scroll
       }
       function pickFromCatalog(id) {
         if (catalogMode === "tiles") {
@@ -1122,16 +1199,20 @@
           state.objVar = 0;
           state._pendingObjVar = null; // re-tirage pour le nouvel objet
         }
+        hideVpop();
         document.getElementById("modal").classList.remove("open");
         renderPanel();
       }
-      document.getElementById("modalClose").onclick = () =>
+      document.getElementById("modalClose").onclick = () => {
+        hideVpop();
         document.getElementById("modal").classList.remove("open");
+      };
       // Échap ferme le catalogue (même si le focus est dans le champ de recherche)
       window.addEventListener("keydown", (e) => {
         const m = document.getElementById("modal");
         if (e.key === "Escape" && m.classList.contains("open")) {
           e.preventDefault();
+          hideVpop();
           m.classList.remove("open");
         }
       });
