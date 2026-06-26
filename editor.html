@@ -485,31 +485,47 @@
       .modal {
         position: fixed;
         inset: 0;
-        background: #0b0e12ee;
+        background: #0b0e1299;
+        backdrop-filter: blur(2px);
         z-index: 50;
         display: none;
-        flex-direction: column;
-        padding: 18px 26px;
+        align-items: center;
+        justify-content: center;
+        padding: 28px;
       }
       .modal.open {
         display: flex;
       }
+      /* boîte centrée (au lieu d'occuper tout l'écran) */
+      .modal .mdialog {
+        display: flex;
+        flex-direction: column;
+        width: min(900px, 100%);
+        max-height: min(660px, 100%);
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow: 0 24px 60px #000c;
+        padding: 16px 20px 18px;
+        overflow: hidden;
+      }
       .modal .mhead {
         display: flex;
         align-items: center;
+        justify-content: space-between;
         gap: 16px;
-        margin-bottom: 8px;
+        margin-bottom: 12px;
+        flex: 0 0 auto;
       }
       .modal h2 {
         margin: 0;
-        font-size: 22px;
+        font-size: 20px;
       }
       .modal .msearch {
-        flex: 1;
+        flex: 0 0 auto;
       }
       .modal .msearch input {
         width: 100%;
-        max-width: 340px;
         background: var(--panel2);
         color: var(--ink);
         border: 1px solid var(--border);
@@ -525,10 +541,29 @@
         background: none;
         border: 0;
         width: auto;
+        padding-right: 0;
       }
       .modal .mbody {
         overflow-y: auto;
         flex: 1;
+        min-height: 0;
+        padding-right: 16px;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border) transparent;
+      }
+      .modal .mbody::-webkit-scrollbar {
+        width: 10px;
+      }
+      .modal .mbody::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .modal .mbody::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 10px;
+        border: 2px solid var(--panel);
+      }
+      .modal .mbody::-webkit-scrollbar-thumb:hover {
+        background: #5a616d;
       }
       .mgroup h3 {
         font-size: 17px;
@@ -610,12 +645,18 @@
       .vpop .vgrid img,
       .vpop .vmore {
         width: 44px;
-        height: 44px;
+        height: 60px;
         border-radius: 8px;
-        background: #0004;
       }
       .vpop .vgrid img {
         object-fit: contain;
+      }
+      /* tuiles : PNG 256×384 avec du vide transparent en haut/bas → on remplit
+         la vignette en recadrant sur la face de l'hexagone (pas de "vide pour rien").
+         Les objets gardent "contain" pour ne pas être rognés. */
+      .vpop.tiles .vgrid img {
+        object-fit: cover;
+        object-position: 50% 90%;
       }
       .vpop .vmore {
         display: flex;
@@ -656,6 +697,14 @@
             />
           </svg>
         </button>
+        <button class="tbtn" data-tool="objects" title="Objets">
+          <svg viewBox="0 0 24 24">
+            <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
+            <path
+              d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+            />
+          </svg>
+        </button>
         <button class="tbtn" data-tool="roads" title="Routes">
           <svg viewBox="0 0 24 24">
             <circle cx="6" cy="19" r="3" />
@@ -668,14 +717,6 @@
             <path d="M2 6q2.5 2 5 0t5 0 5 0 5 0" />
             <path d="M2 12q2.5 2 5 0t5 0 5 0 5 0" />
             <path d="M2 18q2.5 2 5 0t5 0 5 0 5 0" />
-          </svg>
-        </button>
-        <button class="tbtn" data-tool="objects" title="Objets">
-          <svg viewBox="0 0 24 24">
-            <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
-            <path
-              d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
-            />
           </svg>
         </button>
         <button class="tbtn" data-tool="regions" title="Régions">
@@ -717,14 +758,20 @@
 
     <!-- MODALE CATALOGUE -->
     <div class="modal" id="modal">
-      <div class="mhead">
-        <h2 id="modalTitle">Catalogue</h2>
-        <div class="msearch">
-          <input type="text" id="modalSearch" placeholder="Filtrer par nom…" />
+      <div class="mdialog">
+        <div class="mhead">
+          <h2 id="modalTitle">Catalogue</h2>
+          <button class="close" id="modalClose">×</button>
         </div>
-        <button class="close" id="modalClose">×</button>
+        <div class="msearch">
+          <input
+            type="text"
+            id="modalSearch"
+            placeholder="Filtrer par nom…"
+          />
+        </div>
+        <div class="mbody" id="modalBody"></div>
       </div>
-      <div class="mbody" id="modalBody"></div>
     </div>
 
     <div class="toast" id="toast" style="display: none"></div>
@@ -1238,7 +1285,7 @@
           tileMap: isRoad ? ROAD_TILE : RIVER_TILE,
           bridgeMap: isRoad ? BRIDGE_TILE : null,
           hasBridge: isRoad,
-          title: isRoad ? "Road Catalog" : "River Catalog",
+          title: isRoad ? "Catalogue de routes" : "Catalogue de rivières",
         };
       }
       // variante stable pour un (hex, masque) donné (pas de scintillement au re-rendu)
@@ -1749,7 +1796,7 @@
               </div>`,
                 )
                 .join("")}</div>`
-            : `<div class="rempty">Aucune région.<br>Crée-en une pour commencer à peindre.</div>`;
+            : "";
           const reg = getRegion(state.activeRegion);
           const editor = reg
             ? `<div class="rfield">
@@ -1770,10 +1817,10 @@
             </div>`
             : "";
           p.innerHTML = `<h2>Régions</h2>
-      ${erase}
       <button id="createRegion" class="rcreate">${ic("plus")} Créer une région</button>
       <div class="rsub">Sélectionner une région à peindre</div>
       <div class="rscroll">${list}${editor}</div>
+      ${erase}
       <button class="danger" id="clearBtn">${ic("trash")} Tout effacer</button>`;
           document.getElementById("createRegion").onclick = createRegion;
           // sélection d'une région dans la liste
@@ -1845,6 +1892,16 @@
       /* =================== CATALOGUE (MODALE) =================== */
       let catalogMode = "tiles";
 
+      // Échelle d'affichage d'une carte proportionnelle à la taille réelle de l'image.
+      // Les petits objets (ex. Cow Skull 27px) ne sont plus étirés pour remplir la carte
+      // (donc plus pixélisés) : ils s'affichent plus petits, fidèles à leur taille réelle.
+      // Au-delà de CARD_REF px, l'image remplit la carte ; un plancher évite l'invisibilité.
+      const CARD_REF = 180;
+      function cardScalePct(it) {
+        const s = Math.max(it.w || 0, it.h || 0) / CARD_REF;
+        return Math.round(Math.max(0.34, Math.min(1, s || 1)) * 100);
+      }
+
       /* --- popover d'aperçu des variantes (singleton) --- */
       const vpop = document.createElement("div");
       vpop.className = "vpop";
@@ -1858,6 +1915,7 @@
           shown.map((v) => `<img src="${url(v)}">`).join("") +
           (extra > 0 ? `<div class="vmore">+${extra}</div>` : "") +
           `</div>`;
+        vpop.classList.toggle("tiles", catalogMode === "tiles");
         vpop.classList.add("show");
         const cr = card.getBoundingClientRect(),
           pr = vpop.getBoundingClientRect();
@@ -1874,9 +1932,9 @@
         const isEdge = mode === "roads" || mode === "rivers";
         document.getElementById("modalTitle").textContent =
           mode === "tiles"
-            ? "Tile Catalog"
+            ? "Catalogue de tuiles"
             : mode === "objects"
-              ? "Object Catalog"
+              ? "Catalogue d'objets"
               : edgeCfg(mode).title;
         const search = document.getElementById("modalSearch");
         search.value = "";
@@ -1906,8 +1964,9 @@
           if (!items.length) continue;
           html += `<div class="mgroup"><h3>${g.group}</h3><div class="cards">`;
           for (const it of items) {
+            const sp = cardScalePct(it);
             html += `<div class="card${it.id === selId ? " sel" : ""}" data-id="${it.id}" title="${it.name} (${it.w}×${it.h})">
-        <img loading="lazy" src="${url(it.variants[0])}">
+        <img loading="lazy" style="width:${sp}%;height:${sp}%" src="${url(it.variants[0])}">
         ${it.variants.length > 1 ? `<span class="badge">×${it.variants.length}</span>` : ""}
         <span class="lbl">${it.name}</span></div>`;
           }
