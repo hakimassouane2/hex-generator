@@ -561,17 +561,6 @@
             <circle cx="17.5" cy="17.5" r="3.5" />
           </svg>
         </button>
-        <button
-          class="tbtn disabled"
-          data-tool="texts"
-          title="Textes (à venir)"
-        >
-          <svg viewBox="0 0 24 24">
-            <path d="M12 4v16" />
-            <path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2" />
-            <path d="M9 20h6" />
-          </svg>
-        </button>
         <div class="spacer"></div>
         <button class="tbtn" id="gridBtn" title="Afficher/masquer la grille">
           <svg viewBox="0 0 24 24">
@@ -693,6 +682,10 @@
         brushObj: null,
         objRandom: true,
         objVar: 0, // variante d'objet choisie manuellement (si objRandom = false)
+        roadAuto: true, // routes : tracé auto-connecté (défaut) vs pose manuelle d'une pièce du catalogue
+        roadBrush: null, // pièce de route choisie en mode manuel : { mask, bridge }
+        riverAuto: true, // idem pour les rivières
+        riverBrush: null, // pièce de rivière choisie en mode manuel : { mask, bridge:false }
       };
       const key = (c, r) => c + "," + r;
 
@@ -743,7 +736,8 @@
         }
         // routes / rivières : tuile d'arêtes plein-hex, au-dessus du terrain, sous les objets
         if (c.road) {
-          const p = edgeTilePath(ROAD_TILE, c.road, c._col, c._row);
+          const map = c.roadBridge ? BRIDGE_TILE : ROAD_TILE;
+          const p = edgeTilePath(map, c.road, c._col, c._row);
           if (p)
             s += `<image href="${url(p)}" x="${c._tx}" y="${c._ty}" width="${TILE_W}" height="${TILE_H}"/>`;
         }
@@ -889,16 +883,18 @@
 
       // tuiles d'arêtes indexées par masque : { mask -> [chemins variantes] }
       const ROAD_TILE = {},
+        BRIDGE_TILE = {}, // ponts : même indexation par masque, jeu d'assets distinct
         RIVER_TILE = {};
-      // jeu de rivières disponible (incomplet : seules 3 formes existent côté assets)
-      const RIVER_RAW = (CAT && CAT.rivers_raw) || [
-        "assets/tiles/terrain-legacy/hexRiver000011-00.png",
-        "assets/tiles/terrain-legacy/hexRiver010000-00.png",
-        "assets/tiles/terrain-legacy/hexRiver010010-01.png",
-      ];
+      // jeu de rivières (63 masques complets, dossier assets/tiles/rivers)
+      const RIVER_RAW = (CAT && CAT.rivers_raw) || [];
       (function buildEdgeTiles() {
         for (const p of CAT.roads_raw || []) {
-          const m = /hexRoad-(\d{6})-(\d+)\.png/.exec(p);
+          let m = /hexRoadBridge-(\d{6})-(\d+)\.png/.exec(p);
+          if (m) {
+            (BRIDGE_TILE[parseInt(m[1], 2)] ||= []).push(p);
+            continue;
+          }
+          m = /hexRoad-(\d{6})-(\d+)\.png/.exec(p);
           if (m) (ROAD_TILE[parseInt(m[1], 2)] ||= []).push(p);
         }
         for (const p of RIVER_RAW) {
@@ -906,6 +902,50 @@
           if (m) (RIVER_TILE[parseInt(m[1], 2)] ||= []).push(p);
         }
       })();
+      // nombre de sorties (bits à 1) et test « ligne droite » (deux arêtes opposées)
+      const popcount = (m) => {
+        let n = 0;
+        while (m) {
+          n += m & 1;
+          m >>= 1;
+        }
+        return n;
+      };
+      const isStraightMask = (m) =>
+        m === 0b001001 || m === 0b010010 || m === 0b100100;
+      // catégories du Road Catalog (mode manuel), dans l'ordre d'affichage
+      const ROAD_CATS = [
+        { title: "Single Exits", test: (m) => popcount(m) === 1 },
+        { title: "Straight Roads", test: (m) => isStraightMask(m) },
+        {
+          title: "Corner Roads",
+          test: (m) => popcount(m) === 2 && !isStraightMask(m),
+        },
+        { title: "3-Way Intersections", test: (m) => popcount(m) === 3 },
+        { title: "4-Way Intersections", test: (m) => popcount(m) === 4 },
+        { title: "5-Way Intersections", test: (m) => popcount(m) === 5 },
+        { title: "6-Way Intersections", test: (m) => popcount(m) === 6 },
+      ];
+      function roadShapeLabel(mask) {
+        const n = popcount(mask);
+        if (n === 1) return "Single exit";
+        if (n === 2) return isStraightMask(mask) ? "Straight" : "Corner";
+        return n + "-way";
+      }
+      // config commune routes/rivières (outil ou mode de catalogue "roads"/"rivers")
+      function edgeCfg(which) {
+        const isRoad = which === "roads";
+        return {
+          isRoad,
+          auto: isRoad ? "roadAuto" : "riverAuto", // clé du flag auto dans state
+          brush: isRoad ? "roadBrush" : "riverBrush", // clé de la pièce choisie dans state
+          layer: isRoad ? "road" : "river", // champ de masque sur la cellule
+          tileMap: isRoad ? ROAD_TILE : RIVER_TILE,
+          bridgeMap: isRoad ? BRIDGE_TILE : null,
+          hasBridge: isRoad,
+          title: isRoad ? "Road Catalog" : "River Catalog",
+        };
+      }
       // variante stable pour un (hex, masque) donné (pas de scintillement au re-rendu)
       function edgeTilePath(map, mask, col, row) {
         const arr = map[mask];
@@ -943,6 +983,7 @@
         const c = state.cells.get(key(col, row));
         if (c && c[layer]) {
           c[layer] = 0;
+          if (layer === "road") c.roadBridge = 0;
           pruneCell(key(col, row));
           updateCell(col, row);
         }
@@ -986,7 +1027,7 @@
       function getCell(k, create) {
         let c = state.cells.get(k);
         if (!c && create) {
-          c = { terrain: null, objects: [], road: 0, river: 0 };
+          c = { terrain: null, objects: [], road: 0, roadBridge: 0, river: 0 };
           state.cells.set(k, c);
         }
         return c;
@@ -1017,6 +1058,18 @@
           if (state.erase) {
             eraseEdgeAt(col, row, layer);
             state._lastHex = null;
+            scheduleSave();
+            return;
+          }
+          // mode manuel : on tamponne la pièce choisie telle quelle, sans auto-connexion
+          const cfg = edgeCfg(state.tool);
+          if (!state[cfg.auto]) {
+            const b = state[cfg.brush];
+            if (!b) return;
+            const c = getCell(k, true);
+            c[cfg.layer] = b.mask;
+            if (cfg.isRoad) c.roadBridge = b.bridge ? b.mask : 0;
+            updateCell(col, row);
             scheduleSave();
             return;
           }
@@ -1260,13 +1313,38 @@
             };
           });
         } else if (state.tool === "roads" || state.tool === "rivers") {
-          const isRoad = state.tool === "roads";
-          p.innerHTML = `<h2>${isRoad ? "Routes" : "Rivières"}</h2>
-      <div class="sub" style="line-height:1.5;margin-bottom:4px;font-size:12px;color:var(--muted)">
-        Clique-glisse sur la carte : ${isRoad ? "la route" : "la rivière"} suit le curseur d'hex en hex. Relâche pour terminer.
-      </div>
+          const cfg = edgeCfg(state.tool);
+          const auto = state[cfg.auto];
+          // choix auto-connexion vs pose manuelle d'une pièce du catalogue
+          const autoOpt = `<label class="opt"><input type="checkbox" id="edgeAutoChk" ${auto ? "checked" : ""}> ${ic("shuffle")} Automatique</label>`;
+          const b = state[cfg.brush];
+          const bmap = b && b.bridge ? cfg.bridgeMap : cfg.tileMap;
+          const manualSrc = b && bmap && bmap[b.mask] ? url(bmap[b.mask][0]) : null;
+          const manualUI = !auto
+            ? `<div class="preview" id="edgeCatOpen">
+        ${manualSrc ? `<img src="${manualSrc}"><div class="sub">${b.bridge ? "Pont" : roadShapeLabel(b.mask)} · clic pour changer</div>` : '<div class="sub">Choisir une pièce…</div>'}
+      </div>`
+            : "";
+          p.innerHTML = `<h2>${cfg.isRoad ? "Routes" : "Rivières"}</h2>
+      ${manualUI}
+      ${autoOpt}
       ${erase}
       ${footer}`;
+          const ac = document.getElementById("edgeAutoChk");
+          if (ac)
+            ac.onchange = (e) => {
+              state[cfg.auto] = e.target.checked;
+              // 1re bascule en manuel : pièce par défaut (ligne droite) si rien n'est choisi
+              if (!state[cfg.auto] && !state[cfg.brush]) {
+                const dft = cfg.tileMap[0b001001]
+                  ? 0b001001
+                  : +Object.keys(cfg.tileMap)[0];
+                state[cfg.brush] = { mask: dft, bridge: false };
+              }
+              renderPanel();
+            };
+          const rco = document.getElementById("edgeCatOpen");
+          if (rco) rco.onclick = () => openCatalog(state.tool);
         }
         const ec = document.getElementById("eraseChk");
         if (ec) ec.onchange = (e) => (state.erase = e.target.checked);
@@ -1310,13 +1388,23 @@
       const hideVpop = () => vpop.classList.remove("show");
       function openCatalog(mode) {
         catalogMode = mode;
+        const isEdge = mode === "roads" || mode === "rivers";
         document.getElementById("modalTitle").textContent =
-          mode === "tiles" ? "Tile Catalog" : "Object Catalog";
-        document.getElementById("modalSearch").value = "";
+          mode === "tiles"
+            ? "Tile Catalog"
+            : mode === "objects"
+              ? "Object Catalog"
+              : edgeCfg(mode).title;
+        const search = document.getElementById("modalSearch");
+        search.value = "";
+        // pas de recherche texte pour les routes/rivières (pièces sans nom)
+        search.style.display = isEdge ? "none" : "";
         renderCatalog("");
         document.getElementById("modal").classList.add("open");
       }
       function renderCatalog(q) {
+        if (catalogMode === "roads" || catalogMode === "rivers")
+          return renderEdgeCatalog(catalogMode);
         q = (q || "").toLowerCase();
         const groups = catalogMode === "tiles" ? CAT.tiles : CAT.objects;
         const selId =
@@ -1356,6 +1444,62 @@
         });
         body.onscroll = hideVpop; // évite un popover figé pendant le scroll
       }
+      // Road/River Catalog (mode manuel) : une carte par masque, regroupées par nombre de sorties (+ ponts pour les routes)
+      function renderEdgeCatalog(mode) {
+        const cfg = edgeCfg(mode);
+        const sel = state[cfg.brush];
+        const card = (map, mask, bridge) => {
+          const arr = map[mask];
+          if (!arr || !arr.length) return "";
+          const on =
+            sel && sel.mask === mask && !!sel.bridge === bridge ? " sel" : "";
+          return `<div class="card${on}" data-mask="${mask}" data-bridge="${bridge ? 1 : 0}" title="${bridge ? "Bridge" : roadShapeLabel(mask)}">
+        <img loading="lazy" src="${url(arr[0])}">
+        ${arr.length > 1 ? `<span class="badge">×${arr.length}</span>` : ""}</div>`;
+        };
+        let html = "";
+        for (const cat of ROAD_CATS) {
+          const masks = Object.keys(cfg.tileMap)
+            .map(Number)
+            .filter(cat.test)
+            .sort((a, b) => a - b);
+          if (!masks.length) continue;
+          html += `<div class="mgroup"><h3>${cat.title}</h3><div class="cards">${masks
+            .map((m) => card(cfg.tileMap, m, false))
+            .join("")}</div></div>`;
+        }
+        if (cfg.hasBridge && cfg.bridgeMap) {
+          const bMasks = Object.keys(cfg.bridgeMap)
+            .map(Number)
+            .sort((a, b) => a - b);
+          if (bMasks.length)
+            html += `<div class="mgroup"><h3>Bridges</h3><div class="cards">${bMasks
+              .map((m) => card(cfg.bridgeMap, m, true))
+              .join("")}</div></div>`;
+        }
+        const body = document.getElementById("modalBody");
+        body.innerHTML =
+          html || '<p style="color:var(--muted)">Aucune pièce.</p>';
+        body.querySelectorAll(".card").forEach((el) => {
+          el.onclick = () =>
+            pickEdgeFromCatalog(mode, +el.dataset.mask, el.dataset.bridge === "1");
+          const map = el.dataset.bridge === "1" ? cfg.bridgeMap : cfg.tileMap;
+          const arr = map && map[+el.dataset.mask];
+          if (arr && arr.length > 1) {
+            el.addEventListener("mouseenter", () =>
+              showVpop(el, { variants: arr }),
+            );
+            el.addEventListener("mouseleave", hideVpop);
+          }
+        });
+        body.onscroll = hideVpop;
+      }
+      function pickEdgeFromCatalog(mode, mask, bridge) {
+        state[edgeCfg(mode).brush] = { mask, bridge };
+        hideVpop();
+        document.getElementById("modal").classList.remove("open");
+        renderPanel();
+      }
       function pickFromCatalog(id) {
         if (catalogMode === "tiles") {
           state.brushTile = TILES_BY_ID.get(id);
@@ -1392,7 +1536,7 @@
 
       /* =================== OUTILS / UI =================== */
       function setTool(t) {
-        if (["regions", "texts"].includes(t)) {
+        if (["regions"].includes(t)) {
           toast("« " + t + " » arrive bientôt");
           return;
         }
@@ -1638,6 +1782,7 @@
             ),
           };
           if (c.road) cell.r = c.road; // masque d'arêtes route
+          if (c.roadBridge) cell.rb = c.roadBridge; // route = pont (jeu d'assets distinct)
           if (c.river) cell.w = c.river; // masque d'arêtes rivière
           cells.push([k, cell]);
         }
@@ -1664,6 +1809,7 @@
             terrain,
             objects,
             road: c.r || 0,
+            roadBridge: c.rb || 0,
             river: c.w || 0,
           });
         }

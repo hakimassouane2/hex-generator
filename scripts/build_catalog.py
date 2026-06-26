@@ -393,8 +393,18 @@ obj_missing = sorted({s for s in WM_OBJ_LOOKUP if s not in obj_have})
 roads_files = sorted([f['p'] for f in files if f['c']=='roads'])
 
 catalog = {'tiles': tiles_groups, 'objects': objects_groups, 'roads_raw': roads_files}
-with open('catalog.js','w',encoding='utf-8') as fh:
-    fh.write('window.CATALOG=' + json.dumps(catalog, ensure_ascii=False) + ';')
+# GARDE-FOU : catalog.js est REGROUPÉ À LA MAIN (commit 1cac1c4 "regrouped assets" :
+# trees A/B/C fusionnés, granary A/B/C fusionnés, items Unknown nettoyés, etc.).
+# Cette logique n'est PAS reproduite ici, donc réécrire catalog.js détruirait ce travail.
+# Pour ajouter une catégorie brute (roads_raw/rivers_raw…), patcher catalog.js directement.
+# Override volontaire (au risque d'écraser le regroupement) : CATALOG_OVERWRITE=1
+if os.environ.get('CATALOG_OVERWRITE') == '1':
+    with open('catalog.js','w',encoding='utf-8') as fh:
+        fh.write('window.CATALOG=' + json.dumps(catalog, ensure_ascii=False) + ';')
+    print('catalog.js RÉÉCRIT (CATALOG_OVERWRITE=1) — vérifier que le regroupement manuel est OK')
+else:
+    print('catalog.js NON modifié (regroupement manuel protégé). '
+          'Pour forcer : CATALOG_OVERWRITE=1 python3 scripts/build_catalog.py')
 
 # ===== MANIFESTE nom -> chemin (pour index.html) =====
 # index.html ne reconstruit plus les chemins via 2 dossiers plats (terrainDir/decorDir) :
