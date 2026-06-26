@@ -235,6 +235,131 @@
         gap: 6px;
         margin-top: 10px;
       }
+      /* ---- panneau Régions ---- */
+      .rcreate {
+        margin-top: 14px;
+      }
+      .rsub {
+        font-size: 13px;
+        color: var(--accent);
+        margin-top: 18px;
+        line-height: 1.35;
+      }
+      .rscroll {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        margin: 8px -6px 0;
+        padding: 0 6px;
+        min-height: 0;
+      }
+      .rlist {
+        background: var(--panel2);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .ritem {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px;
+        border-radius: 7px;
+        cursor: pointer;
+        font-size: 15px;
+      }
+      .ritem:hover {
+        background: #ffffff0a;
+      }
+      .ritem.sel {
+        background: #ffffff14;
+      }
+      .ritem .sw {
+        width: 22px;
+        height: 22px;
+        border-radius: 5px;
+        border: 2px solid var(--accent);
+        flex: 0 0 auto;
+      }
+      .ritem .rname {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .ritem .rdel {
+        width: 26px;
+        height: 26px;
+        flex: 0 0 auto;
+        padding: 0;
+        background: transparent;
+        color: var(--muted);
+        border-radius: 6px;
+        opacity: 0;
+      }
+      .ritem:hover .rdel,
+      .ritem.sel .rdel {
+        opacity: 1;
+      }
+      .ritem .rdel:hover {
+        color: #e07a72;
+        background: #ffffff10;
+      }
+      .ritem .rdel .ic {
+        width: 15px;
+        height: 15px;
+      }
+      .rempty {
+        font-size: 12px;
+        color: var(--muted);
+        text-align: center;
+        line-height: 1.5;
+        padding: 16px 8px;
+      }
+      .rfield {
+        margin-top: 16px;
+      }
+      .rfield > label {
+        display: block;
+        font-size: 12px;
+        color: var(--accent);
+        margin-bottom: 6px;
+      }
+      .rfield input[type="text"] {
+        width: 100%;
+        background: var(--panel2);
+        color: var(--ink);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 9px 11px;
+        font-size: 16px;
+        box-sizing: border-box;
+      }
+      .rfield input[type="color"] {
+        width: 100%;
+        height: 38px;
+        background: var(--panel2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 4px;
+        cursor: pointer;
+        box-sizing: border-box;
+      }
+      .rslider {
+        margin-top: 18px;
+      }
+      .rslider .rslabel {
+        font-size: 14px;
+        margin-bottom: 9px;
+      }
+      .rslider input[type="range"] {
+        width: 100%;
+        accent-color: var(--accent);
+        cursor: pointer;
+      }
       /* barre d'outils verticale */
       .toolbar {
         width: 56px;
@@ -548,11 +673,7 @@
             />
           </svg>
         </button>
-        <button
-          class="tbtn disabled"
-          data-tool="regions"
-          title="Régions (à venir)"
-        >
+        <button class="tbtn" data-tool="regions" title="Régions">
           <svg viewBox="0 0 24 24">
             <path
               d="M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z"
@@ -658,6 +779,36 @@
         [0, 316],
         [0, 191],
       ];
+      // arête de l'hex touchée par chaque direction (indices dans HEX_LOCAL)
+      // 0=W 1=SW 2=SE 3=E 4=NE 5=NW   (sert au contour des régions)
+      const REGION_EDGE = [
+        [4, 5], // W  : gauche vertical
+        [3, 4], // SW : bas-gauche
+        [2, 3], // SE : bas-droite
+        [1, 2], // E  : droite vertical
+        [0, 1], // NE : haut-droite
+        [5, 0], // NW : haut-gauche
+      ];
+      // couleurs par défaut attribuées aux régions à la création (cycle)
+      const REGION_PALETTE = [
+        "#4ec3e0",
+        "#e0564e",
+        "#62c370",
+        "#d6a44e",
+        "#9b6fd4",
+        "#e08a4e",
+        "#4e9be0",
+        "#d44e9b",
+      ];
+      // centre (barycentre) de la silhouette, pour rentrer le contour vers l'intérieur
+      const HEX_CENTER = [128, 253.5];
+      const REGION_INSET_PX = 13; // distance dont le contour rentre vers l'intérieur du hex
+      const REGION_STROKE = 7; // épaisseur du trait de contour
+      // hexagone réduit (pour l'aperçu fantôme d'un seul hex)
+      const HEX_INSET = HEX_LOCAL.map((v) => [
+        +(HEX_CENTER[0] + (v[0] - HEX_CENTER[0]) * 0.9).toFixed(1),
+        +(HEX_CENTER[1] + (v[1] - HEX_CENTER[1]) * 0.9).toFixed(1),
+      ]);
       const url = (p) => encodeURI(p);
       const isFull = (it) => it.w === 256 && it.h === 384;
       const PAD = 16; // marge de grille non-cliquable autour de la zone active (canvas "infini")
@@ -686,7 +837,13 @@
         roadBrush: null, // pièce de route choisie en mode manuel : { mask, bridge }
         riverAuto: true, // idem pour les rivières
         riverBrush: null, // pièce de rivière choisie en mode manuel : { mask, bridge:false }
+        regions: [], // [{id, name, color, fill, outline}] — fill/outline = opacités 0..1 par région
+        activeRegion: null, // id de la région peinte actuellement
+        _regionSeq: 0, // compteur d'ids de régions (croissant, jamais réutilisé)
       };
+      // accès rapide à une région par son id (le tableau reste petit)
+      const getRegion = (id) =>
+        id == null ? null : state.regions.find((r) => r.id === id) || null;
       const key = (c, r) => c + "," + r;
 
       /* default brushes */
@@ -720,6 +877,138 @@
         const it = TILES_BY_ID.get(terrain.id);
         if (!it || it.under === "none") return null;
         return it.under === "ocean" ? UNDER_OCEAN : UNDER_DIRT;
+      }
+
+      /* ---- calque régions (voile coloré) — par cellule, AU-DESSUS de tout ----
+         Seul le VOILE est dessiné ici (incrémental par hex). Le CONTOUR est
+         tracé à part (buildRegionOutlines) comme une boucle continue rentrée
+         vers l'intérieur, pour qu'il ne déborde pas sur la région voisine. */
+      function regionInner(c) {
+        if (!c || c.region == null) return "";
+        const reg = getRegion(c.region);
+        if (!reg) return "";
+        const fillOp = reg.fill != null ? reg.fill : 0.35;
+        if (fillOp <= 0) return "";
+        return `<polygon points="${hexPolyTile(c._tx, c._ty)}" fill="${reg.color}" fill-opacity="${fillOp}" stroke="none" pointer-events="none"/>`;
+      }
+
+      /* ---- contour des régions : périmètre tracé puis rentré vers l'intérieur ----
+         On reconstruit les arêtes de bordure en boucles fermées continues, puis
+         on décale chaque boucle vers l'intérieur (offset) -> trait continu qui
+         ne chevauche pas la région d'à côté (chacune reste dans ses hex). */
+      function lineIntersect(p1, d1, p2, d2) {
+        const den = d1.x * d2.y - d1.y * d2.x;
+        if (Math.abs(den) < 1e-6) return { x: p2.x, y: p2.y }; // arêtes alignées -> continuité
+        const t =
+          ((p2.x - p1.x) * d2.y - (p2.y - p1.y) * d2.x) / den;
+        return { x: p1.x + d1.x * t, y: p1.y + d1.y * t };
+      }
+      function regionLoops(cells) {
+        const vkey = (x, y) => Math.round(x) + "," + Math.round(y);
+        const inSet = new Set(cells.map((c) => c._col + "," + c._row));
+        const edges = []; // {A,B,nx,ny} arête de bordure + normale intérieure unitaire
+        for (const c of cells) {
+          const cx = c._tx + HEX_CENTER[0],
+            cy = c._ty + HEX_CENTER[1];
+          for (let dir = 0; dir < 6; dir++) {
+            const n = neighbor(c._col, c._row, dir);
+            if (inSet.has(n[0] + "," + n[1])) continue; // arête interne au groupe
+            const [ia, ib] = REGION_EDGE[dir];
+            const A = { x: c._tx + HEX_LOCAL[ia][0], y: c._ty + HEX_LOCAL[ia][1] };
+            const B = { x: c._tx + HEX_LOCAL[ib][0], y: c._ty + HEX_LOCAL[ib][1] };
+            const mx = (A.x + B.x) / 2,
+              my = (A.y + B.y) / 2;
+            let nx = cx - mx,
+              ny = cy - my;
+            const nl = Math.hypot(nx, ny) || 1;
+            edges.push({ A, B, nx: nx / nl, ny: ny / nl });
+          }
+        }
+        // adjacence sommet -> arêtes
+        const adj = new Map();
+        const add = (kk, i) => {
+          if (!adj.has(kk)) adj.set(kk, []);
+          adj.get(kk).push(i);
+        };
+        edges.forEach((e, i) => {
+          add(vkey(e.A.x, e.A.y), i);
+          add(vkey(e.B.x, e.B.y), i);
+        });
+        // assemblage en boucles fermées
+        const used = new Array(edges.length).fill(false);
+        const loops = [];
+        for (let i = 0; i < edges.length; i++) {
+          if (used[i]) continue;
+          const loop = [];
+          let idx = i,
+            e = edges[i];
+          const startKey = vkey(e.A.x, e.A.y);
+          let from = e.A,
+            to = e.B,
+            guard = 0;
+          while (guard++ < edges.length + 5) {
+            used[idx] = true;
+            loop.push({ A: from, B: to, nx: e.nx, ny: e.ny });
+            const toKey = vkey(to.x, to.y);
+            if (toKey === startKey) break;
+            const cand = (adj.get(toKey) || []).filter(
+              (j) => j !== idx && !used[j],
+            );
+            if (!cand.length) break;
+            idx = cand[0];
+            e = edges[idx];
+            if (vkey(e.A.x, e.A.y) === toKey) {
+              from = e.A;
+              to = e.B;
+            } else {
+              from = e.B;
+              to = e.A;
+            }
+          }
+          if (loop.length >= 3) loops.push(loop);
+        }
+        // décalage vers l'intérieur (miter) de chaque boucle
+        const D = REGION_INSET_PX;
+        return loops.map((loop) => {
+          const m = loop.length,
+            pts = [];
+          for (let j = 0; j < m; j++) {
+            const e = loop[j],
+              ne = loop[(j + 1) % m];
+            const p1 = { x: e.A.x + e.nx * D, y: e.A.y + e.ny * D };
+            const d1 = { x: e.B.x - e.A.x, y: e.B.y - e.A.y };
+            const p2 = { x: ne.A.x + ne.nx * D, y: ne.A.y + ne.ny * D };
+            const d2 = { x: ne.B.x - ne.A.x, y: ne.B.y - ne.A.y };
+            pts.push(lineIntersect(p1, d1, p2, d2));
+          }
+          return pts;
+        });
+      }
+      function buildRegionOutlines() {
+        let out = "";
+        for (const reg of state.regions) {
+          const outOp = reg.outline != null ? reg.outline : 0.85;
+          if (outOp <= 0) continue;
+          const cells = [];
+          for (const c of state.cells.values())
+            if (c.region === reg.id) cells.push(c);
+          if (!cells.length) continue;
+          let d = "";
+          for (const loop of regionLoops(cells)) {
+            if (loop.length < 2) continue;
+            d +=
+              "M" +
+              loop.map((p) => p.x.toFixed(1) + " " + p.y.toFixed(1)).join("L") +
+              "Z";
+          }
+          if (d)
+            out += `<path d="${d}" fill="none" stroke="${reg.color}" stroke-opacity="${outOp}" stroke-width="${REGION_STROKE}" stroke-linejoin="round" stroke-linecap="round" pointer-events="none"/>`;
+        }
+        return out;
+      }
+      function renderRegionOutlines() {
+        const g = document.getElementById("rOutlines");
+        if (g) g.innerHTML = buildRegionOutlines();
       }
 
       function cellInner(c) {
@@ -773,6 +1062,7 @@
         state._vb = { x: vbX, y: vbY, w: vbW, h: vbH }; // mémorisé pour le zoom (évite de tout reconstruire)
         let body = "",
           grid = "",
+          rlayer = "",
           hit = "";
         for (let row = r0; row <= r1; row++)
           for (let col = c0; col <= c1; col++) {
@@ -789,6 +1079,7 @@
                 c._row = row;
               }
               body += `<g class="cell" data-k="${k}">${cellInner(c)}</g>`;
+              rlayer += `<g class="rcell" data-k="${k}">${regionInner(c)}</g>`;
               if (state.showGrid)
                 grid += `<polygon class="gridline" data-gk="${k}" points="${hexPolyTile(t.x, t.y)}"${c && c.terrain ? ' style="display:none"' : ""}/>`;
               hit += `<polygon class="hit" data-col="${col}" data-row="${row}" points="${hexPolyTile(t.x, t.y)}"/>`;
@@ -798,7 +1089,7 @@
             }
           }
         document.getElementById("svgWrap").innerHTML =
-          `<svg id="svg" viewBox="${vbX} ${vbY} ${vbW} ${vbH}" width="${(vbW * state.zoom) | 0}" height="${(vbH * state.zoom) | 0}">${grid}${body}<g id="ghost"></g>${hit}</svg>`;
+          `<svg id="svg" viewBox="${vbX} ${vbY} ${vbW} ${vbH}" width="${(vbW * state.zoom) | 0}" height="${(vbH * state.zoom) | 0}">${grid}${body}<g id="regions">${rlayer}</g><g id="rOutlines">${buildRegionOutlines()}</g><g id="ghost"></g>${hit}</svg>`;
         bindCanvas();
       }
       function updateCell(col, row) {
@@ -814,6 +1105,8 @@
         const g = document.querySelector(`g.cell[data-k="${CSS.escape(k)}"]`);
         if (g) g.innerHTML = cellInner(c);
         else render();
+        const rg = document.querySelector(`g.rcell[data-k="${CSS.escape(k)}"]`);
+        if (rg) rg.innerHTML = regionInner(c);
         const gl = document.querySelector(
           `polygon.gridline[data-gk="${CSS.escape(k)}"]`,
         );
@@ -1002,6 +1295,7 @@
       }
       function restoreSnap(str) {
         deserialize(JSON.parse(str)); // remplace les cellules + rend
+        renderPanel(); // la liste des régions / sélection a pu changer
         scheduleSave();
       }
       function undo() {
@@ -1027,14 +1321,28 @@
       function getCell(k, create) {
         let c = state.cells.get(k);
         if (!c && create) {
-          c = { terrain: null, objects: [], road: 0, roadBridge: 0, river: 0 };
+          c = {
+            terrain: null,
+            objects: [],
+            road: 0,
+            roadBridge: 0,
+            river: 0,
+            region: null,
+          };
           state.cells.set(k, c);
         }
         return c;
       }
       function pruneCell(k) {
         const c = state.cells.get(k);
-        if (c && !c.terrain && c.objects.length === 0 && !c.road && !c.river)
+        if (
+          c &&
+          !c.terrain &&
+          c.objects.length === 0 &&
+          !c.road &&
+          !c.river &&
+          c.region == null
+        )
           state.cells.delete(k);
       }
 
@@ -1088,6 +1396,23 @@
             state._lastHex = to;
             scheduleSave();
           }
+          return;
+        }
+        if (state.tool === "regions") {
+          if (state.erase) {
+            const c = getCell(k);
+            if (!c || c.region == null) return;
+            c.region = null;
+            pruneCell(k);
+          } else {
+            if (state.activeRegion == null) return; // aucune région sélectionnée
+            const c = getCell(k, true);
+            if (c.region === state.activeRegion) return; // déjà dans cette région
+            c.region = state.activeRegion; // remplace toute région précédente
+          }
+          updateCell(col, row); // voile de l'hex peint
+          renderRegionOutlines(); // contour(s) recalculé(s) (boucle continue)
+          scheduleSave();
           return;
         }
         if (state.tool === "tiles") {
@@ -1172,6 +1497,15 @@
           const x = (t.x + 128 - it.w / 2).toFixed(1),
             y = (t.y + ANCHOR_Y - it.h).toFixed(1);
           return `<image href="${url(p)}" x="${x}" y="${y}" width="${it.w}" height="${it.h}"/>`;
+        } else if (state.tool === "regions") {
+          const reg = getRegion(state.activeRegion);
+          if (!reg) return "";
+          // aperçu : voile + contour rentré, dans la couleur de la région active
+          const fillOp = reg.fill != null ? reg.fill : 0.35;
+          const inset = HEX_INSET.map(
+            (v) => (t.x + v[0]).toFixed(1) + "," + (t.y + v[1]).toFixed(1),
+          ).join(" ");
+          return `<polygon points="${hexPolyTile(t.x, t.y)}" fill="${reg.color}" fill-opacity="${fillOp}" stroke="none"/><polygon points="${inset}" fill="none" stroke="${reg.color}" stroke-width="${REGION_STROKE}" stroke-linejoin="round"/>`;
         }
         return "";
       }
@@ -1207,6 +1541,7 @@
               }
             } else if (
               state.tool === "tiles" ||
+              (state.tool === "regions" && state.activeRegion != null) ||
               (state.tool === "objects" &&
                 state.brushObj &&
                 isFull(state.brushObj))
@@ -1248,9 +1583,64 @@
         back: '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
         trash:
           '<path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+        plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
       };
       const ic = (n) =>
         `<svg class="ic" viewBox="0 0 24 24">${ICONS[n] || ""}</svg>`;
+
+      /* =================== RÉGIONS (gestion) =================== */
+      const esc = (s) =>
+        String(s).replace(
+          /[&<>"]/g,
+          (c) =>
+            ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+        );
+      function createRegion() {
+        withHistory(() => {
+          state._regionSeq++;
+          const reg = {
+            id: state._regionSeq,
+            name: "Région " + (state.regions.length + 1),
+            color: REGION_PALETTE[state.regions.length % REGION_PALETTE.length],
+            fill: 0.35,
+            outline: 0.85,
+          };
+          state.regions.push(reg);
+          state.activeRegion = reg.id;
+          scheduleSave();
+        });
+        renderPanel();
+      }
+      function deleteRegion(id) {
+        const i = state.regions.findIndex((r) => r.id === id);
+        if (i < 0) return;
+        withHistory(() => {
+          state.regions.splice(i, 1);
+          // détache les hex qui appartenaient à cette région
+          for (const [k, c] of state.cells)
+            if (c.region === id) {
+              c.region = null;
+              pruneCell(k);
+            }
+          if (state.activeRegion === id)
+            state.activeRegion = state.regions.length
+              ? state.regions[0].id
+              : null;
+          render(); // beaucoup d'hex potentiellement touchés -> reconstruction complète
+          scheduleSave();
+        });
+        renderPanel();
+      }
+      // ré-affiche le voile de toutes les cellules d'une région (changement couleur/opacité)
+      function refreshRegionCells(id) {
+        for (const [k, c] of state.cells)
+          if (c.region === id) {
+            const rg = document.querySelector(
+              `g.rcell[data-k="${CSS.escape(k)}"]`,
+            );
+            if (rg) rg.innerHTML = regionInner(c);
+          }
+      }
 
       function renderPanel() {
         const p = document.getElementById("panel");
@@ -1345,6 +1735,97 @@
             };
           const rco = document.getElementById("edgeCatOpen");
           if (rco) rco.onclick = () => openCatalog(state.tool);
+        } else if (state.tool === "regions") {
+          const list = state.regions.length
+            ? `<div class="rlist">${state.regions
+                .map(
+                  (r) =>
+                    `<div class="ritem${r.id === state.activeRegion ? " sel" : ""}" data-id="${r.id}">
+                <span class="sw" style="background:${r.color}"></span>
+                <span class="rname">${esc(r.name)}</span>
+                <button class="rdel" data-del="${r.id}" title="Supprimer la région">${ic("trash")}</button>
+              </div>`,
+                )
+                .join("")}</div>`
+            : `<div class="rempty">Aucune région.<br>Crée-en une pour commencer à peindre.</div>`;
+          const reg = getRegion(state.activeRegion);
+          const editor = reg
+            ? `<div class="rfield">
+              <label>Nom de la région</label>
+              <input type="text" id="rName" value="${esc(reg.name)}" maxlength="40">
+            </div>
+            <div class="rfield">
+              <label>Couleur</label>
+              <input type="color" id="rColor" value="${reg.color}">
+            </div>
+            <div class="rslider">
+              <div class="rslabel">Opacité du remplissage : <b id="rFillVal">${Math.round(reg.fill * 100)}%</b></div>
+              <input type="range" id="rFill" min="0" max="100" value="${Math.round(reg.fill * 100)}">
+            </div>
+            <div class="rslider">
+              <div class="rslabel">Opacité du contour : <b id="rOutVal">${Math.round(reg.outline * 100)}%</b></div>
+              <input type="range" id="rOut" min="0" max="100" value="${Math.round(reg.outline * 100)}">
+            </div>`
+            : "";
+          p.innerHTML = `<h2>Régions</h2>
+      ${erase}
+      <button id="createRegion" class="rcreate">${ic("plus")} Créer une région</button>
+      <div class="rsub">Sélectionner une région à peindre</div>
+      <div class="rscroll">${list}${editor}</div>
+      <button class="danger" id="clearBtn">${ic("trash")} Tout effacer</button>`;
+          document.getElementById("createRegion").onclick = createRegion;
+          // sélection d'une région dans la liste
+          p.querySelectorAll(".ritem").forEach((el) => {
+            el.onclick = (e) => {
+              if (e.target.closest(".rdel")) return; // clic sur la corbeille géré à part
+              state.activeRegion = +el.dataset.id;
+              renderPanel();
+            };
+          });
+          p.querySelectorAll(".rdel").forEach((b) => {
+            b.onclick = (e) => {
+              e.stopPropagation();
+              const r = getRegion(+b.dataset.del);
+              if (r && confirm(`Supprimer « ${r.name} » ?`))
+                deleteRegion(+b.dataset.del);
+            };
+          });
+          if (reg) {
+            const nm = document.getElementById("rName");
+            nm.oninput = (e) => {
+              reg.name = e.target.value;
+              const lbl = p.querySelector(
+                `.ritem[data-id="${reg.id}"] .rname`,
+              );
+              if (lbl) lbl.textContent = reg.name;
+              scheduleSave();
+            };
+            const col = document.getElementById("rColor");
+            col.oninput = (e) => {
+              reg.color = e.target.value;
+              const sw = p.querySelector(`.ritem[data-id="${reg.id}"] .sw`);
+              if (sw) sw.style.background = reg.color;
+              refreshRegionCells(reg.id); // voile
+              renderRegionOutlines(); // contour
+              scheduleSave();
+            };
+            const rf = document.getElementById("rFill");
+            rf.oninput = (e) => {
+              reg.fill = +e.target.value / 100;
+              document.getElementById("rFillVal").textContent =
+                e.target.value + "%";
+              refreshRegionCells(reg.id); // opacité du voile
+              scheduleSave();
+            };
+            const ro = document.getElementById("rOut");
+            ro.oninput = (e) => {
+              reg.outline = +e.target.value / 100;
+              document.getElementById("rOutVal").textContent =
+                e.target.value + "%";
+              renderRegionOutlines(); // opacité du contour
+              scheduleSave();
+            };
+          }
         }
         const ec = document.getElementById("eraseChk");
         if (ec) ec.onchange = (e) => (state.erase = e.target.checked);
@@ -1536,10 +2017,6 @@
 
       /* =================== OUTILS / UI =================== */
       function setTool(t) {
-        if (["regions"].includes(t)) {
-          toast("« " + t + " » arrive bientôt");
-          return;
-        }
         state.tool = t;
         state.erase = false;
         document
@@ -1784,14 +2261,42 @@
           if (c.road) cell.r = c.road; // masque d'arêtes route
           if (c.roadBridge) cell.rb = c.roadBridge; // route = pont (jeu d'assets distinct)
           if (c.river) cell.w = c.river; // masque d'arêtes rivière
+          if (c.region != null) cell.rg = c.region; // id de région assignée
           cells.push([k, cell]);
         }
-        return { cols: state.cols, rows: state.rows, cells };
+        return {
+          cols: state.cols,
+          rows: state.rows,
+          cells,
+          regions: state.regions,
+          activeRegion: state.activeRegion,
+          regionSeq: state._regionSeq,
+        };
       }
       function deserialize(d) {
         state.cols = d.cols || 60;
         state.rows = d.rows || 44;
         state._lastHex = null;
+        // régions (rétro-compat : champs absents sur les anciennes cartes)
+        state.regions = (d.regions || []).map((r) => ({
+          id: r.id,
+          name: r.name || "Région",
+          color: r.color || REGION_PALETTE[0],
+          fill: r.fill != null ? r.fill : 0.35,
+          outline: r.outline != null ? r.outline : 0.85,
+        }));
+        const regIds = new Set(state.regions.map((r) => r.id));
+        state.activeRegion =
+          d.activeRegion != null && regIds.has(d.activeRegion)
+            ? d.activeRegion
+            : state.regions.length
+              ? state.regions[0].id
+              : null;
+        state._regionSeq = Math.max(
+          d.regionSeq || 0,
+          ...state.regions.map((r) => r.id),
+          0,
+        );
         state.cells = new Map();
         for (const [k, c] of d.cells || []) {
           const terrain =
@@ -1811,6 +2316,7 @@
             road: c.r || 0,
             roadBridge: c.rb || 0,
             river: c.w || 0,
+            region: c.rg != null && regIds.has(c.rg) ? c.rg : null,
           });
         }
         render();
