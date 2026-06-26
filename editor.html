@@ -69,9 +69,6 @@
       .gridline.pad {
         stroke: #00000029;
       }
-      #lines {
-        pointer-events: none;
-      }
       #ghost {
         opacity: 0.5;
         pointer-events: none;
@@ -691,7 +688,6 @@
         tool: "tiles",
         erase: false,
         cells: new Map(), // "c,r" -> {terrain:{id,v}|null, objects:[{id,v}]}
-        lines: [], // routes/rivières : [{type:"road"|"river", hexes:["c,r",...]}]
         brushTile: null,
         tileVar: 0, // item + variante courante
         brushObj: null,
@@ -745,6 +741,17 @@
             s += `<image href="${url(p)}" x="${c._tx}" y="${c._ty}" width="${TILE_W}" height="${TILE_H}"/>`;
           }
         }
+        // routes / rivières : tuile d'arêtes plein-hex, au-dessus du terrain, sous les objets
+        if (c.road) {
+          const p = edgeTilePath(ROAD_TILE, c.road, c._col, c._row);
+          if (p)
+            s += `<image href="${url(p)}" x="${c._tx}" y="${c._ty}" width="${TILE_W}" height="${TILE_H}"/>`;
+        }
+        if (c.river) {
+          const p = edgeTilePath(RIVER_TILE, c.river, c._col, c._row);
+          if (p)
+            s += `<image href="${url(p)}" x="${c._tx}" y="${c._ty}" width="${TILE_W}" height="${TILE_H}"/>`;
+        }
         for (const o of c.objects) {
           const r = objItemVar(o);
           if (!r) continue;
@@ -784,6 +791,8 @@
               if (c) {
                 c._tx = t.x;
                 c._ty = t.y;
+                c._col = col;
+                c._row = row;
               }
               body += `<g class="cell" data-k="${k}">${cellInner(c)}</g>`;
               if (state.showGrid)
@@ -795,7 +804,7 @@
             }
           }
         document.getElementById("svgWrap").innerHTML =
-          `<svg id="svg" viewBox="${vbX} ${vbY} ${vbW} ${vbH}" width="${(vbW * state.zoom) | 0}" height="${(vbH * state.zoom) | 0}">${grid}${body}<g id="lines">${linesMarkup()}</g><g id="ghost"></g>${hit}</svg>`;
+          `<svg id="svg" viewBox="${vbX} ${vbY} ${vbW} ${vbH}" width="${(vbW * state.zoom) | 0}" height="${(vbH * state.zoom) | 0}">${grid}${body}<g id="ghost"></g>${hit}</svg>`;
         bindCanvas();
       }
       function updateCell(col, row) {
@@ -805,6 +814,8 @@
         if (c) {
           c._tx = t.x;
           c._ty = t.y;
+          c._col = col;
+          c._row = row;
         }
         const g = document.querySelector(`g.cell[data-k="${CSS.escape(k)}"]`);
         if (g) g.innerHTML = cellInner(c);
@@ -815,71 +826,126 @@
         if (gl) gl.style.display = c && c.terrain ? "none" : "";
       }
 
-      /* =================== ROUTES / RIVIÈRES (overlay vectoriel) =================== */
-      // style de tracé par type (unités SVG, une tuile fait 256 de large)
-      const LINE_STYLE = {
-        road: { core: "#caa86a", casing: "#6e5028", w: 15, cw: 25 },
-        river: { core: "#4f93d6", casing: "#2c5f95", w: 21, cw: 31 },
-      };
-      const LINE_CY = 253.5; // centre vertical de l'hex (centroïde des 6 sommets)
-      function lineCenter(k) {
-        const i = k.indexOf(","),
-          col = +k.slice(0, i),
-          row = +k.slice(i + 1),
-          t = tileXY(col, row);
-        return [t.x + 128, t.y + LINE_CY];
+      /* =================== ROUTES / RIVIÈRES (tuiles d'arêtes en overlay) ===================
+         Chaque hex traversé stocke un masque 6 bits (c.road / c.river) ; on affiche la
+         tuile correspondante (hexRoad-<masque>-<v>.png), dont les amorces rejoignent les
+         arêtes -> route/rivière continue et texturée, comme la vraie feature.
+         bit0=W bit1=SW bit2=SE bit3=E bit4=NE bit5=NW   |   opposé = (bit+3)%6           */
+      const DIRS = [
+        { even: [-1, 0], odd: [-1, 0] }, // 0 W
+        { even: [-1, 1], odd: [0, 1] }, // 1 SW
+        { even: [0, 1], odd: [1, 1] }, // 2 SE
+        { even: [1, 0], odd: [1, 0] }, // 3 E
+        { even: [0, -1], odd: [1, -1] }, // 4 NE
+        { even: [-1, -1], odd: [0, -1] }, // 5 NW
+      ];
+      function neighbor(col, row, d) {
+        const o = row & 1 ? DIRS[d].odd : DIRS[d].even;
+        return [col + o[0], row + o[1]];
       }
-      // courbe lissée (Catmull-Rom -> béziers cubiques) passant par tous les points
-      function smoothPath(p) {
-        if (p.length < 2) return "";
-        let d = `M ${p[0][0].toFixed(1)} ${p[0][1].toFixed(1)}`;
-        for (let i = 0; i < p.length - 1; i++) {
-          const p0 = p[i - 1] || p[i],
-            p1 = p[i],
-            p2 = p[i + 1],
-            p3 = p[i + 2] || p2;
-          const c1x = p1[0] + (p2[0] - p0[0]) / 6,
-            c1y = p1[1] + (p2[1] - p0[1]) / 6,
-            c2x = p2[0] - (p3[0] - p1[0]) / 6,
-            c2y = p2[1] - (p3[1] - p1[1]) / 6;
-          d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
+      function dirBetween(a, b) {
+        for (let d = 0; d < 6; d++) {
+          const n = neighbor(a[0], a[1], d);
+          if (n[0] === b[0] && n[1] === b[1]) return d;
         }
-        return d;
+        return -1; // pas voisins
       }
-      function linesMarkup() {
-        const drawn = (state.lines || []).filter(
-          (ln) => ln.hexes && ln.hexes.length,
+      // offset (odd-r, lignes impaires à droite) -> cube, pour distance + tracé de ligne
+      function toCube(col, row) {
+        const x = col - (row - (row & 1)) / 2,
+          z = row;
+        return [x, -x - z, z];
+      }
+      function cubeDist(a, b) {
+        return (
+          (Math.abs(a[0] - b[0]) +
+            Math.abs(a[1] - b[1]) +
+            Math.abs(a[2] - b[2])) /
+          2
         );
-        let casings = "",
-          cores = "";
-        const cap = ' fill="none" stroke-linecap="round" stroke-linejoin="round"';
-        for (const ln of drawn) {
-          const st = LINE_STYLE[ln.type] || LINE_STYLE.road;
-          const pts = ln.hexes.map(lineCenter);
-          if (pts.length === 1) {
-            // tracé d'un seul hex : petit point (extrémité isolée)
-            const [x, y] = pts[0];
-            cores += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(st.w / 2).toFixed(1)}" fill="${st.core}"/>`;
-            continue;
+      }
+      // chaîne d'hexes ADJACENTS de A (exclu) à B (inclus) — comble les sauts d'un drag rapide
+      function hexWalk(a, b) {
+        const out = [],
+          cb = toCube(b[0], b[1]);
+        let cur = a,
+          guard = 0;
+        while ((cur[0] !== b[0] || cur[1] !== b[1]) && guard++ < 300) {
+          let best = 0,
+            bestD = Infinity;
+          for (let d = 0; d < 6; d++) {
+            const n = neighbor(cur[0], cur[1], d),
+              dist = cubeDist(toCube(n[0], n[1]), cb);
+            if (dist < bestD) {
+              bestD = dist;
+              best = d;
+            }
           }
-          const d = smoothPath(pts);
-          // 2 passes (tous les liserés puis tous les cœurs) => jonctions nettes aux croisements
-          casings += `<path d="${d}"${cap} stroke="${st.casing}" stroke-width="${st.cw}"/>`;
-          cores += `<path d="${d}"${cap} stroke="${st.core}" stroke-width="${st.w}"/>`;
+          cur = neighbor(cur[0], cur[1], best);
+          out.push(cur);
         }
-        return casings + cores;
+        return out;
       }
-      function renderLines() {
-        const g = document.getElementById("lines");
-        if (g) g.innerHTML = linesMarkup();
-        else render();
+
+      // tuiles d'arêtes indexées par masque : { mask -> [chemins variantes] }
+      const ROAD_TILE = {},
+        RIVER_TILE = {};
+      // jeu de rivières disponible (incomplet : seules 3 formes existent côté assets)
+      const RIVER_RAW = (CAT && CAT.rivers_raw) || [
+        "assets/tiles/terrain-legacy/hexRiver000011-00.png",
+        "assets/tiles/terrain-legacy/hexRiver010000-00.png",
+        "assets/tiles/terrain-legacy/hexRiver010010-01.png",
+      ];
+      (function buildEdgeTiles() {
+        for (const p of CAT.roads_raw || []) {
+          const m = /hexRoad-(\d{6})-(\d+)\.png/.exec(p);
+          if (m) (ROAD_TILE[parseInt(m[1], 2)] ||= []).push(p);
+        }
+        for (const p of RIVER_RAW) {
+          const m = /hexRiver(\d{6})-(\d+)\.png/.exec(p);
+          if (m) (RIVER_TILE[parseInt(m[1], 2)] ||= []).push(p);
+        }
+      })();
+      // variante stable pour un (hex, masque) donné (pas de scintillement au re-rendu)
+      function edgeTilePath(map, mask, col, row) {
+        const arr = map[mask];
+        if (!arr || !arr.length) return null;
+        if (arr.length === 1) return arr[0];
+        let h = (col * 73856093) ^ (row * 19349663) ^ (mask * 83492791);
+        return arr[(h >>> 0) % arr.length];
       }
-      // gomme : retire tout tracé passant par l'hex cliqué ; renvoie true si ça a changé
-      function eraseLineAt(col, row) {
-        const kk = key(col, row),
-          before = state.lines.length;
-        state.lines = state.lines.filter((ln) => !ln.hexes.includes(kk));
-        return state.lines.length !== before;
+
+      // pose/retire une demi-arête sur un hex et rafraîchit son rendu
+      function setEdgeBit(col, row, layer, bit, on) {
+        const k = key(col, row),
+          c = on ? getCell(k, true) : state.cells.get(k);
+        if (!c) return;
+        c[layer] = on
+          ? (c[layer] || 0) | (1 << bit)
+          : (c[layer] || 0) & ~(1 << bit);
+        if (!on) pruneCell(k);
+        updateCell(col, row);
+      }
+      // relie deux hexes voisins : bit côté A + bit opposé côté B
+      function connectEdge(a, b, layer) {
+        const d = dirBetween(a, b);
+        if (d < 0) return;
+        setEdgeBit(a[0], a[1], layer, d, true);
+        setEdgeBit(b[0], b[1], layer, (d + 3) % 6, true);
+      }
+      // gomme : efface le masque de l'hex ET les demi-arêtes des voisins qui pointaient vers lui
+      function eraseEdgeAt(col, row, layer) {
+        for (let d = 0; d < 6; d++) {
+          const n = neighbor(col, row, d),
+            nc = state.cells.get(key(n[0], n[1]));
+          if (nc && nc[layer]) setEdgeBit(n[0], n[1], layer, (d + 3) % 6, false);
+        }
+        const c = state.cells.get(key(col, row));
+        if (c && c[layer]) {
+          c[layer] = 0;
+          pruneCell(key(col, row));
+          updateCell(col, row);
+        }
       }
 
       /* =================== HISTORIQUE (undo/redo) =================== */
@@ -920,14 +986,15 @@
       function getCell(k, create) {
         let c = state.cells.get(k);
         if (!c && create) {
-          c = { terrain: null, objects: [] };
+          c = { terrain: null, objects: [], road: 0, river: 0 };
           state.cells.set(k, c);
         }
         return c;
       }
       function pruneCell(k) {
         const c = state.cells.get(k);
-        if (c && !c.terrain && c.objects.length === 0) state.cells.delete(k);
+        if (c && !c.terrain && c.objects.length === 0 && !c.road && !c.river)
+          state.cells.delete(k);
       }
 
       /* convertit la position d'un événement souris en coordonnées SVG (tient compte du zoom et du défilement) */
@@ -946,25 +1013,27 @@
       function applyAt(col, row, isClick, pt) {
         const k = key(col, row);
         if (state.tool === "roads" || state.tool === "rivers") {
+          const layer = state.tool === "roads" ? "road" : "river";
           if (state.erase) {
-            if (eraseLineAt(col, row)) {
-              renderLines();
-              scheduleSave();
-            }
+            eraseEdgeAt(col, row, layer);
+            state._lastHex = null;
+            scheduleSave();
             return;
           }
-          if (isClick) {
-            // démarre un nouveau tracé (poussé direct dans state.lines pour l'undo)
-            state._activeLine = {
-              type: state.tool === "roads" ? "road" : "river",
-              hexes: [],
-            };
-            state.lines.push(state._activeLine);
+          // premier hex du tracé : on mémorise, l'arête se pose dès qu'on entre dans un voisin
+          if (isClick || !state._lastHex) {
+            state._lastHex = [col, row];
+            return;
           }
-          const ln = state._activeLine;
-          if (ln && ln.hexes[ln.hexes.length - 1] !== k) {
-            ln.hexes.push(k);
-            renderLines();
+          const to = [col, row];
+          if (to[0] !== state._lastHex[0] || to[1] !== state._lastHex[1]) {
+            let prev = state._lastHex;
+            for (const cur of hexWalk(prev, to)) {
+              connectEdge(prev, cur, layer); // comble aussi les sauts du drag rapide
+              prev = cur;
+            }
+            state._lastHex = to;
+            scheduleSave();
           }
           return;
         }
@@ -1100,14 +1169,8 @@
       window.addEventListener("mouseup", () => {
         if (!painting) return;
         painting = false;
-        if (state._activeLine) {
-          // un tracé d'un seul hex (clic sans glisser) est dégénéré : on le retire
-          if (state._activeLine.hexes.length < 2) {
-            const i = state.lines.indexOf(state._activeLine);
-            if (i >= 0) state.lines.splice(i, 1);
-            renderLines();
-          }
-          state._activeLine = null;
+        if (state._lastHex) {
+          state._lastHex = null;
           scheduleSave();
         }
         if (strokeBefore != null) {
@@ -1213,7 +1276,6 @@
         if (confirm("Tout effacer ?"))
           withHistory(() => {
             state.cells.clear();
-            state.lines = [];
             render();
             scheduleSave();
           });
@@ -1568,31 +1630,23 @@
       /* =================== PERSISTANCE =================== */
       function serialize() {
         const cells = [];
-        for (const [k, c] of state.cells)
-          cells.push([
-            k,
-            {
-              t: c.terrain ? [c.terrain.id, c.terrain.v] : null,
-              o: c.objects.map((o) =>
-                o.ox != null ? [o.id, o.v, o.ox, o.oy] : [o.id, o.v],
-              ),
-            },
-          ]);
-        const lines = (state.lines || [])
-          .filter((ln) => ln.hexes && ln.hexes.length)
-          .map((ln) => ({ type: ln.type, hexes: ln.hexes.slice() }));
-        return { cols: state.cols, rows: state.rows, cells, lines };
+        for (const [k, c] of state.cells) {
+          const cell = {
+            t: c.terrain ? [c.terrain.id, c.terrain.v] : null,
+            o: c.objects.map((o) =>
+              o.ox != null ? [o.id, o.v, o.ox, o.oy] : [o.id, o.v],
+            ),
+          };
+          if (c.road) cell.r = c.road; // masque d'arêtes route
+          if (c.river) cell.w = c.river; // masque d'arêtes rivière
+          cells.push([k, cell]);
+        }
+        return { cols: state.cols, rows: state.rows, cells };
       }
       function deserialize(d) {
         state.cols = d.cols || 60;
         state.rows = d.rows || 44;
-        state._activeLine = null;
-        state.lines = (d.lines || [])
-          .filter((ln) => ln && ln.hexes && ln.hexes.length)
-          .map((ln) => ({
-            type: ln.type === "river" ? "river" : "road",
-            hexes: ln.hexes.slice(),
-          }));
+        state._lastHex = null;
         state.cells = new Map();
         for (const [k, c] of d.cells || []) {
           const terrain =
@@ -1606,7 +1660,12 @@
                 ? { id: o[0], v: o[1] || 0, ox: o[2], oy: o[3] }
                 : { id: o[0], v: o[1] || 0 },
             );
-          state.cells.set(k, { terrain, objects });
+          state.cells.set(k, {
+            terrain,
+            objects,
+            road: c.r || 0,
+            river: c.w || 0,
+          });
         }
         render();
       }
