@@ -2365,6 +2365,65 @@
         };
         inp.click();
       }
+      /* dessine le calque régions (voile + contour) sur un canvas 2D pour l'export.
+         Reproduit le rendu écran : voile = silhouette d'hex remplie, contour = boucle
+         rentrée vers l'intérieur (regionLoops). coords en espace tuile - crop. */
+      function drawRegionsToCanvas(ctx, cropX, cropY) {
+        if (!state.regions.length) return;
+        const byReg = new Map();
+        for (let row = 0; row < state.rows; row++)
+          for (let col = 0; col < state.cols; col++) {
+            const c = state.cells.get(key(col, row));
+            if (!c || c.region == null) continue;
+            if (!byReg.has(c.region)) byReg.set(c.region, []);
+            const t = tileXY(col, row);
+            byReg
+              .get(c.region)
+              .push({ _col: col, _row: row, _tx: t.x, _ty: t.y });
+          }
+        for (const reg of state.regions) {
+          const cells = byReg.get(reg.id);
+          if (!cells || !cells.length) continue;
+          const fillOp = reg.fill != null ? reg.fill : 0.35;
+          const outOp = reg.outline != null ? reg.outline : 0.85;
+          if (fillOp > 0) {
+            ctx.save();
+            ctx.globalAlpha = fillOp;
+            ctx.fillStyle = reg.color;
+            for (const c of cells) {
+              ctx.beginPath();
+              HEX_LOCAL.forEach((v, i) => {
+                const x = c._tx + v[0] - cropX,
+                  y = c._ty + v[1] - cropY;
+                i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+              });
+              ctx.closePath();
+              ctx.fill();
+            }
+            ctx.restore();
+          }
+          if (outOp > 0) {
+            ctx.save();
+            ctx.globalAlpha = outOp;
+            ctx.strokeStyle = reg.color;
+            ctx.lineWidth = REGION_STROKE;
+            ctx.lineJoin = "round";
+            ctx.lineCap = "round";
+            for (const loop of regionLoops(cells)) {
+              if (loop.length < 2) continue;
+              ctx.beginPath();
+              loop.forEach((p, i) => {
+                const x = p.x - cropX,
+                  y = p.y - cropY;
+                i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+              });
+              ctx.closePath();
+              ctx.stroke();
+            }
+            ctx.restore();
+          }
+        }
+      }
       function exportPNG(foundry) {
         const EXPORT_MARGIN = 64; // marge autour du contenu (px)
         // mode "Foundry VTT" : étire verticalement pour rendre les hexagones réguliers
@@ -2380,7 +2439,15 @@
         for (let row = 0; row < state.rows; row++)
           for (let col = 0; col < state.cols; col++) {
             const c = state.cells.get(key(col, row));
-            if (!c || (!c.terrain && !c.objects.length)) continue;
+            if (
+              !c ||
+              (!c.terrain &&
+                !c.objects.length &&
+                !c.road &&
+                !c.river &&
+                c.region == null)
+            )
+              continue;
             if (col < minCol) minCol = col;
             if (col > maxCol) maxCol = col;
             if (row < minRow) minRow = row;
@@ -2410,6 +2477,36 @@
                   hex: true,
                 });
               }
+            }
+            // routes / rivières : mêmes tuiles d'arêtes que le rendu écran
+            if (c.road) {
+              const rp = edgeTilePath(
+                c.roadBridge ? BRIDGE_TILE : ROAD_TILE,
+                c.road,
+                col,
+                row,
+              );
+              if (rp)
+                draws.push({
+                  src: rp,
+                  x: t.x,
+                  y: t.y,
+                  w: TILE_W,
+                  h: TILE_H,
+                  hex: true,
+                });
+            }
+            if (c.river) {
+              const rp = edgeTilePath(RIVER_TILE, c.river, col, row);
+              if (rp)
+                draws.push({
+                  src: rp,
+                  x: t.x,
+                  y: t.y,
+                  w: TILE_W,
+                  h: TILE_H,
+                  hex: true,
+                });
             }
             for (const o of c.objects) {
               const r = objItemVar(o);
@@ -2455,6 +2552,17 @@
           if (x1 > maxX) maxX = x1;
           if (y1 > maxY) maxY = y1;
         }
+        // hex de région sans tuile/objet : étendre la boîte à leur silhouette
+        for (let row = 0; row < state.rows; row++)
+          for (let col = 0; col < state.cols; col++) {
+            const c = state.cells.get(key(col, row));
+            if (!c || c.region == null) continue;
+            const t = tileXY(col, row);
+            if (t.x < minX) minX = t.x;
+            if (t.x + 256 > maxX) maxX = t.x + 256;
+            if (t.y + 124 < minY) minY = t.y + 124;
+            if (t.y + 383 > maxY) maxY = t.y + 383;
+          }
         let cropX, cropY, w, h;
         if (foundry) {
           // recadrage aligné sur la trame hexagonale -> colle à une grille Foundry "Hex Rows (Odd)",
@@ -2497,6 +2605,7 @@
             if (im && im.naturalWidth)
               ctx.drawImage(im, d.x - cropX, d.y - cropY, d.w, d.h);
           }
+          drawRegionsToCanvas(ctx, cropX, cropY); // régions (voile + contour) par-dessus tout
           try {
             cv.toBlob((b) => {
               const a = document.createElement("a");
